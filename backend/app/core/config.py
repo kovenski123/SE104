@@ -50,9 +50,10 @@ class PaymentStatus(str, Enum):
 
 
 class MembershipType(str, Enum):
-    BAC = "BAC"
-    VANG = "VANG"
-    BACH_KIM = "BACH_KIM"
+    THUONG = "THUONG"      # mặc định khi chưa đủ doanh thu
+    BAC = "BAC"            # > 1.000.000 VND
+    VANG = "VANG"          # > 3.000.000 VND
+    KIM_CUONG = "KIM_CUONG"  # > 7.000.000 VND
 
 
 class ServiceStatus(str, Enum):
@@ -65,16 +66,33 @@ class ShiftType(str, Enum):
     CHIEU = "CHIEU"
 
 
-# Membership discount
-MEMBERSHIP_DISCOUNT = {
-    "BAC": 0.05,
-    "VANG": 0.10,
-    "BACH_KIM": 0.15,
+# Membership tier theo TỔNG DOANH THU TÍCH LŨY (lifetime spend)
+# Mốc: > 1.000.000 → Bạc, > 3.000.000 → Vàng, > 7.000.000 → Kim cương
+MEMBERSHIP_THRESHOLD = {
+    "BAC": 1_000_000,
+    "VANG": 3_000_000,
+    "KIM_CUONG": 7_000_000,
 }
 
-# Membership fee per month (VND)
+# Discount %
+MEMBERSHIP_DISCOUNT = {
+    "THUONG": 0.0,
+    "BAC": 0.05,
+    "VANG": 0.10,
+    "KIM_CUONG": 0.15,
+}
+
+# Tên hiển thị
+MEMBERSHIP_NAME = {
+    "THUONG": "Thường",
+    "BAC": "Bạc",
+    "VANG": "Vàng",
+    "KIM_CUONG": "Kim Cương",
+}
+
+# Phí gia hạn cũ (giữ để backward compat với router memberships có sẵn)
 MEMBERSHIP_FEE = {
     "BAC": 200000,
     "VANG": 400000,
-    "BACH_KIM": 700000,
+    "KIM_CUONG": 700000,
 }

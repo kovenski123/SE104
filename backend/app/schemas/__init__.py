@@ -168,6 +168,7 @@ class ServiceCreate(BaseModel):
     don_gia: Decimal = Field(..., ge=0)
     don_vi_tinh: str
     ton_kho: int = Field(..., ge=0)
+    la_cho_thue: bool = False
     trang_thai: ServiceStatus = ServiceStatus.HOAT_DONG
 
 
@@ -176,6 +177,7 @@ class ServiceUpdate(BaseModel):
     don_gia: Optional[Decimal] = None
     don_vi_tinh: Optional[str] = None
     ton_kho: Optional[int] = None
+    la_cho_thue: Optional[bool] = None
     trang_thai: Optional[ServiceStatus] = None
 
 
@@ -185,6 +187,7 @@ class ServiceOut(BaseModel):
     don_gia: Decimal
     don_vi_tinh: str
     ton_kho: int
+    la_cho_thue: bool
     trang_thai: ServiceStatus
 
     class Config:

@@ -62,6 +62,57 @@ def get_my_membership(db: Session = Depends(get_db), user: User = Depends(get_cu
     return get_active_membership(db, user.id)
 
 
+@router.get("/me/status")
+def get_my_status(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """
+    Trả về tier hiện tại theo TỔNG DOANH THU TÍCH LŨY + progress tới mốc tiếp theo.
+    Tier tự động dựa trên lifetime spend, không cần đăng ký.
+    """
+    from app.utils.helpers import calculate_lifetime_spend, calculate_tier_from_spend
+    from app.core.config import MEMBERSHIP_THRESHOLD, MEMBERSHIP_DISCOUNT, MEMBERSHIP_NAME
+
+    spend = calculate_lifetime_spend(db, user.id)
+    spend_f = float(spend)
+    tier = calculate_tier_from_spend(spend)
+
+    # Tier kế tiếp + ngưỡng
+    tier_order = ["THUONG", "BAC", "VANG", "KIM_CUONG"]
+    idx = tier_order.index(tier)
+    next_tier = tier_order[idx + 1] if idx < len(tier_order) - 1 else None
+    next_threshold = MEMBERSHIP_THRESHOLD.get(next_tier) if next_tier else None
+    remaining = (next_threshold - spend_f) if next_threshold else 0
+
+    # Progress (%) tới mốc kế tiếp tính từ mốc tier hiện tại
+    current_threshold = 0 if tier == "THUONG" else MEMBERSHIP_THRESHOLD[tier]
+    if next_threshold:
+        progress = max(0, min(100, ((spend_f - current_threshold) / (next_threshold - current_threshold)) * 100))
+    else:
+        progress = 100  # max tier
+
+    return {
+        "tier": tier,
+        "tier_name": MEMBERSHIP_NAME[tier],
+        "discount_percent": int(MEMBERSHIP_DISCOUNT[tier] * 100),
+        "lifetime_spend": spend_f,
+        "current_threshold": current_threshold,
+        "next_tier": next_tier,
+        "next_tier_name": MEMBERSHIP_NAME[next_tier] if next_tier else None,
+        "next_threshold": next_threshold,
+        "remaining_to_next": max(0, remaining),
+        "progress_percent": round(progress, 1),
+        "all_tiers": [
+            {
+                "code": t,
+                "name": MEMBERSHIP_NAME[t],
+                "discount_percent": int(MEMBERSHIP_DISCOUNT[t] * 100),
+                "threshold": 0 if t == "THUONG" else MEMBERSHIP_THRESHOLD[t],
+                "achieved": tier_order.index(t) <= idx,
+            }
+            for t in tier_order
+        ],
+    }
+
+
 @router.get("", response_model=List[MembershipOut])
 def list_memberships(
     db: Session = Depends(get_db),

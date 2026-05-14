@@ -77,6 +77,29 @@ def get_active_membership(db: Session, user_id: int) -> Optional[Membership]:
     ).first()
 
 
+def calculate_lifetime_spend(db: Session, user_id: int) -> Decimal:
+    """Tổng tiền user đã chi (tiền sân tất cả booking hoàn thành)."""
+    from sqlalchemy import func
+    result = db.query(func.coalesce(func.sum(Booking.tien_san), 0)).filter(
+        Booking.khach_hang_id == user_id,
+        Booking.trang_thai == BookingStatus.HOAN_THANH,
+    ).scalar()
+    return Decimal(str(result or 0))
+
+
+def calculate_tier_from_spend(spend) -> str:
+    """Trả về tier (THUONG/BAC/VANG/KIM_CUONG) dựa trên lifetime spend."""
+    from app.core.config import MEMBERSHIP_THRESHOLD
+    spend_f = float(spend)
+    if spend_f > MEMBERSHIP_THRESHOLD["KIM_CUONG"]:
+        return "KIM_CUONG"
+    if spend_f > MEMBERSHIP_THRESHOLD["VANG"]:
+        return "VANG"
+    if spend_f > MEMBERSHIP_THRESHOLD["BAC"]:
+        return "BAC"
+    return "THUONG"
+
+
 def get_discount_rate(loai_the: Optional[str]) -> float:
     if not loai_the:
         return 0.0

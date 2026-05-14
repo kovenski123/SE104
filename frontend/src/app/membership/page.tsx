@@ -2,164 +2,219 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Navbar from "@/components/Navbar";
-import { apiGet, apiPost, formatVND, formatDate, getUser } from "@/lib/api";
-import { Sparkles, Check, Loader2 } from "lucide-react";
+import { apiGet, formatVND, getUser } from "@/lib/api";
+import { Loader2, Check, Sparkles, TrendingUp } from "lucide-react";
 
-const CARDS = [
-  {
-    type: "BAC", name: "BẠC", color: "from-slate-400 to-slate-600", text: "text-slate-100",
-    monthly: 200000, discount: "5%",
-    perks: ["Giảm 5% tiền sân", "Đặt sân trước 7 ngày", "Hỗ trợ ưu tiên"],
-  },
-  {
-    type: "VANG", name: "VÀNG", color: "from-amber-400 to-amber-600", text: "text-amber-50",
-    monthly: 400000, discount: "10%",
-    perks: ["Giảm 10% tiền sân", "Đặt sân trước 14 ngày", "Tặng 1 chai nước/lần", "Hỗ trợ VIP"],
-  },
-  {
-    type: "BACH_KIM", name: "BẠCH KIM", color: "from-zinc-700 via-zinc-900 to-black", text: "text-white",
-    monthly: 700000, discount: "15%",
-    perks: ["Giảm 15% tiền sân", "Đặt sân trước 30 ngày", "Tặng dịch vụ thuê giày", "Concierge 24/7"],
-  },
-];
+type TierInfo = {
+  code: "THUONG" | "BAC" | "VANG" | "KIM_CUONG";
+  name: string;
+  discount_percent: number;
+  threshold: number;
+  achieved: boolean;
+};
 
-const PERIODS = [1, 3, 6, 12];
+type Status = {
+  tier: string;
+  tier_name: string;
+  discount_percent: number;
+  lifetime_spend: number;
+  current_threshold: number;
+  next_tier: string | null;
+  next_tier_name: string | null;
+  next_threshold: number | null;
+  remaining_to_next: number;
+  progress_percent: number;
+  all_tiers: TierInfo[];
+};
+
+const TIER_STYLE: Record<string, { card: string; ring: string; chip: string }> = {
+  THUONG: {
+    card: "from-neutral-200 via-neutral-100 to-neutral-300 text-ink-900",
+    ring: "ring-neutral-400",
+    chip: "bg-neutral-700 text-white",
+  },
+  BAC: {
+    card: "from-slate-300 via-slate-100 to-slate-400 text-slate-900",
+    ring: "ring-slate-500",
+    chip: "bg-slate-700 text-white",
+  },
+  VANG: {
+    card: "from-amber-300 via-yellow-200 to-amber-500 text-amber-950",
+    ring: "ring-amber-500",
+    chip: "bg-amber-800 text-white",
+  },
+  KIM_CUONG: {
+    card: "from-cyan-200 via-blue-200 to-indigo-300 text-indigo-950",
+    ring: "ring-indigo-500",
+    chip: "bg-indigo-800 text-white",
+  },
+};
 
 export default function MembershipPage() {
   const router = useRouter();
-  const [current, setCurrent] = useState<any>(null);
-  const [chosen, setChosen] = useState<string>("VANG");
-  const [thang, setThang] = useState<number>(3);
+  const [status, setStatus] = useState<Status | null>(null);
+  const [userName, setUserName] = useState("");
   const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
+  const [err, setErr] = useState("");
 
   useEffect(() => {
-    if (!getUser()) {
+    const u = getUser();
+    if (!u) {
       router.push("/login");
       return;
     }
-    apiGet("/api/memberships/me")
-      .then((r) => setCurrent(r))
-      .catch(() => {})
+    setUserName(u.ho_ten);
+    apiGet("/api/memberships/me/status")
+      .then(setStatus)
+      .catch((e) => setErr(e.message))
       .finally(() => setLoading(false));
   }, []);
-
-  function calcFee(type: string, months: number): number {
-    const card = CARDS.find((c) => c.type === type);
-    if (!card) return 0;
-    let d = 0;
-    if (months >= 12) d = 0.20;
-    else if (months >= 6) d = 0.10;
-    else if (months >= 3) d = 0.05;
-    return card.monthly * months * (1 - d);
-  }
-
-  async function submit() {
-    setSubmitting(true);
-    try {
-      await apiPost("/api/memberships", { loai_the: chosen, thoi_han_thang: thang });
-      alert("Đăng ký thẻ thành viên thành công!");
-      const r = await apiGet("/api/memberships/me");
-      setCurrent(r);
-    } catch (e: any) {
-      alert(e.message);
-    } finally {
-      setSubmitting(false);
-    }
-  }
 
   if (loading) {
     return (
       <>
         <Navbar />
         <div className="p-16 text-center text-ink-400">
-          <Loader2 className="animate-spin mx-auto mb-2" />
+          <Loader2 className="animate-spin mx-auto mb-2" /> Đang tải...
         </div>
       </>
     );
   }
 
+  if (err || !status) {
+    return (
+      <>
+        <Navbar />
+        <div className="max-w-md mx-auto p-6 mt-8 bg-red-50 border border-red-200 rounded text-red-700">
+          {err || "Không tải được dữ liệu"}
+        </div>
+      </>
+    );
+  }
+
+  const tierStyle = TIER_STYLE[status.tier] || TIER_STYLE.THUONG;
+
   return (
     <>
       <Navbar />
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="text-xs font-bold tracking-[0.25em] text-brand-600 mb-2">ƯU ĐÃI</div>
-        <h1 className="font-display text-5xl text-ink-900 mb-2">THẺ THÀNH VIÊN</h1>
-        <p className="text-ink-400 mb-6">Càng đặt nhiều — càng tiết kiệm. Gia hạn linh hoạt 1–12 tháng.</p>
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <h1 className="text-3xl md:text-4xl font-bold text-ink-900 mb-1">Thẻ thành viên của bạn</h1>
+        <p className="text-ink-400 mb-6">Tier tự động cập nhật theo tổng chi tiêu — không cần đăng ký thẻ</p>
 
-        {current && (
-          <div className="mb-8 p-5 rounded-2xl bg-gradient-to-r from-brand-700 to-brand-900 text-white">
-            <div className="flex items-center justify-between flex-wrap gap-3">
+        {/* Membership Card */}
+        <div className={`relative bg-gradient-to-br ${tierStyle.card} rounded-2xl p-6 md:p-8 shadow-lg overflow-hidden mb-6`}>
+          {/* Decoration */}
+          <div className="absolute top-0 right-0 w-64 h-64 bg-white/20 rounded-full -mr-32 -mt-32" />
+          <div className="absolute bottom-0 left-0 w-48 h-48 bg-black/10 rounded-full -ml-24 -mb-24" />
+
+          <div className="relative">
+            <div className="flex items-start justify-between mb-6">
               <div>
-                <div className="text-xs text-white/60 mb-1">THẺ HIỆN TẠI</div>
-                <div className="font-display text-3xl">{current.loai_the}</div>
-                <div className="text-sm text-white/70 mt-1">
-                  Hiệu lực: {formatDate(current.ngay_bat_dau)} → {formatDate(current.ngay_ket_thuc)}
+                <div className="text-xs font-semibold opacity-80 mb-1">SÂN BÓNG UIT • MEMBERSHIP</div>
+                <div className="flex items-center gap-2">
+                  <span className="text-3xl md:text-4xl font-bold">{status.tier_name}</span>
+                  {status.tier === "KIM_CUONG" && <Sparkles size={28} className="text-indigo-700" />}
                 </div>
               </div>
-              <Sparkles size={40} className="text-amber-300" />
+              <div className={`px-3 py-1 rounded-full text-xs font-bold ${tierStyle.chip}`}>
+                -{status.discount_percent}% mỗi lần đặt
+              </div>
             </div>
+
+            <div className="mb-5">
+              <div className="text-xs font-semibold opacity-75 mb-1">CHỦ THẺ</div>
+              <div className="text-xl font-bold">{userName.toUpperCase()}</div>
+            </div>
+
+            <div className="flex items-end justify-between flex-wrap gap-2">
+              <div>
+                <div className="text-xs font-semibold opacity-75 mb-1">TỔNG ĐÃ CHI</div>
+                <div className="text-2xl md:text-3xl font-bold">{formatVND(status.lifetime_spend)}</div>
+              </div>
+              <div className="text-right">
+                <TrendingUp size={32} className="opacity-50 ml-auto" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Progress to next tier */}
+        {status.next_tier ? (
+          <div className="bg-white rounded-2xl border border-neutral-200 p-5 md:p-6 mb-6">
+            <div className="flex items-end justify-between mb-2 flex-wrap gap-2">
+              <div>
+                <div className="text-sm text-ink-400">Tiến độ lên tier kế tiếp</div>
+                <div className="text-xl font-bold text-ink-900">
+                  Còn <span className="text-red-700">{formatVND(status.remaining_to_next)}</span> nữa lên {status.next_tier_name}
+                </div>
+              </div>
+              <div className="text-3xl font-bold text-ink-900">{status.progress_percent}%</div>
+            </div>
+
+            {/* Progress bar */}
+            <div className="relative h-3 bg-neutral-100 rounded-full overflow-hidden mb-3">
+              <div className="absolute inset-y-0 left-0 bg-gradient-to-r from-red-600 to-red-800 rounded-full transition-all duration-500"
+                style={{ width: `${status.progress_percent}%` }} />
+            </div>
+            <div className="flex justify-between text-xs text-ink-400">
+              <span>{formatVND(status.current_threshold)}</span>
+              <span>{formatVND(status.next_threshold || 0)}</span>
+            </div>
+          </div>
+        ) : (
+          <div className="bg-gradient-to-br from-indigo-50 to-cyan-50 rounded-2xl border border-indigo-200 p-6 mb-6 text-center">
+            <Sparkles className="mx-auto text-indigo-600 mb-2" size={32} />
+            <h3 className="text-xl font-bold text-indigo-900">Bạn đã đạt tier cao nhất!</h3>
+            <p className="text-sm text-indigo-700 mt-1">Cảm ơn bạn đã đồng hành cùng chúng tôi.</p>
           </div>
         )}
 
-        <div className="grid md:grid-cols-3 gap-5 mb-8">
-          {CARDS.map((c) => (
-            <button key={c.type} onClick={() => setChosen(c.type)}
-              className={`relative rounded-3xl bg-gradient-to-br ${c.color} ${c.text} p-6 text-left overflow-hidden ${
-                chosen === c.type ? "ring-4 ring-brand-500 scale-[1.02]" : "hover:scale-[1.01]"
-              } transition`}>
-              <div className="absolute -top-12 -right-12 w-40 h-40 bg-white/10 rounded-full" />
-              <div className="relative">
-                <div className="text-xs tracking-wider opacity-80 mb-1">THẺ</div>
-                <div className="font-display text-4xl mb-3">{c.name}</div>
-                <div className="text-3xl font-bold mb-1">{c.discount}</div>
-                <div className="text-xs opacity-80 mb-4">giảm tiền sân</div>
-                <div className="text-xs opacity-90 mb-4">{formatVND(c.monthly)}/tháng</div>
-                <ul className="space-y-1.5 text-xs">
-                  {c.perks.map((p, i) => (
-                    <li key={i} className="flex items-start gap-1.5">
-                      <Check size={12} className="shrink-0 mt-0.5" /> {p}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </button>
-          ))}
-        </div>
+        {/* All tiers milestones */}
+        <div className="bg-white rounded-2xl border border-neutral-200 p-5 md:p-6">
+          <h2 className="text-xl font-bold text-ink-900 mb-4">Các mốc thành viên</h2>
 
-        <div className="bg-white rounded-2xl border border-ink-900/5 p-6">
-          <h2 className="font-display text-2xl mb-4">Chọn thời hạn</h2>
-          <div className="grid grid-cols-4 gap-3 mb-5">
-            {PERIODS.map((p) => {
-              const off = p >= 12 ? "−20%" : p >= 6 ? "−10%" : p >= 3 ? "−5%" : null;
-              return (
-                <button key={p} onClick={() => setThang(p)}
-                  className={`p-3 rounded-xl border-2 text-center transition ${
-                    thang === p ? "border-brand-500 bg-brand-50" : "border-ink-900/10 hover:border-brand-300"
-                  }`}>
-                  <div className="font-display text-2xl">{p}</div>
-                  <div className="text-xs text-ink-400">tháng</div>
-                  {off && <div className="text-[10px] text-brand-700 font-bold mt-1">{off}</div>}
-                </button>
-              );
-            })}
-          </div>
+          <div className="relative">
+            {/* Track */}
+            <div className="absolute left-5 top-0 bottom-0 w-0.5 bg-neutral-200" />
 
-          <div className="p-4 rounded-xl bg-ink-900/[0.03] flex justify-between items-center mb-4">
-            <div>
-              <div className="text-xs text-ink-400">Tổng phí thẻ</div>
-              <div className="font-display text-4xl text-ink-900">{formatVND(calcFee(chosen, thang))}</div>
-            </div>
-            <div className="text-right text-xs text-ink-400">
-              {CARDS.find((c) => c.type === chosen)?.name} • {thang} tháng
+            <div className="space-y-4">
+              {status.all_tiers.map((tier) => {
+                const isCurrent = tier.code === status.tier;
+                return (
+                  <div key={tier.code} className="relative flex items-start gap-4">
+                    {/* Milestone dot */}
+                    <div className={`relative z-10 w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${
+                      tier.achieved
+                        ? `bg-red-700 text-white ${isCurrent ? `ring-4 ${tierStyle.ring}` : ""}`
+                        : "bg-neutral-200 text-neutral-400"
+                    }`}>
+                      {tier.achieved ? <Check size={18} /> : <span className="text-sm font-bold">{tier.discount_percent}%</span>}
+                    </div>
+
+                    <div className="flex-1 pt-1.5">
+                      <div className="flex items-baseline justify-between flex-wrap gap-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-ink-900">{tier.name}</span>
+                          {isCurrent && <span className="text-xs px-2 py-0.5 rounded-full bg-red-100 text-red-700 font-semibold">Hiện tại</span>}
+                        </div>
+                        <div className="text-sm text-ink-400">
+                          {tier.threshold > 0 ? `> ${formatVND(tier.threshold)}` : "Mặc định"}
+                        </div>
+                      </div>
+                      <div className="text-xs text-ink-400 mt-0.5">
+                        {tier.discount_percent > 0 ? `Giảm ${tier.discount_percent}% mỗi lần đặt sân` : "Chưa có ưu đãi"}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
-
-          <button onClick={submit} disabled={submitting}
-            className="w-full py-3.5 bg-ink-900 hover:bg-ink-800 text-white rounded-xl font-bold disabled:opacity-50 transition">
-            {submitting ? "Đang xử lý..." : current ? "Gia hạn thẻ" : "Đăng ký ngay"}
-          </button>
         </div>
+
+        <p className="text-xs text-ink-400 text-center mt-6">
+          * Tier được tính dựa trên tổng tiền sân đã chi từ các booking hoàn thành (lifetime spend).
+        </p>
       </div>
     </>
   );

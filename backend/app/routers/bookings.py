@@ -163,12 +163,14 @@ def create_booking(
         svc.ton_kho -= item.so_luong
         tien_dich_vu += thanh_tien
 
-    # 8) Tính giảm giá thẻ thành viên (chỉ áp tiền sân)
+    # 8) Tính giảm giá theo tier (LIFETIME SPEND, không cần đăng ký thẻ)
     giam_gia = Decimal(0)
     if khach_hang_id:
-        mem = get_active_membership(db, khach_hang_id)
-        if mem:
-            rate = get_discount_rate(mem.loai_the.value)
+        from app.utils.helpers import calculate_lifetime_spend, calculate_tier_from_spend
+        spend = calculate_lifetime_spend(db, khach_hang_id)
+        tier = calculate_tier_from_spend(spend)
+        rate = get_discount_rate(tier)
+        if rate > 0:
             giam_gia = (tien_san * Decimal(str(rate))).quantize(Decimal("1"))
 
     tong_cong = tien_san + tien_dich_vu - giam_gia
@@ -196,6 +198,8 @@ def list_bookings(
     san_id: Optional[int] = None,
     tu_ngay: Optional[date] = None,
     den_ngay: Optional[date] = None,
+    keyword: Optional[str] = None,  # Admin/staff: search mã, tên KH, SĐT
+    khach_hang_id: Optional[int] = None,  # Admin/staff: filter by customer
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
@@ -211,6 +215,26 @@ def list_bookings(
         q = q.filter(Booking.ngay_dat >= tu_ngay)
     if den_ngay:
         q = q.filter(Booking.ngay_dat <= den_ngay)
+
+    # Admin/staff only: search & filter by khach_hang_id
+    if user.vai_tro != UserRole.KHACH_HANG:
+        if khach_hang_id:
+            q = q.filter(Booking.khach_hang_id == khach_hang_id)
+        if keyword and keyword.strip():
+            kw = f"%{keyword.strip()}%"
+            # Match: mã, tên khách vãng lai, sđt vãng lai, hoặc tên/SĐT của user
+            from sqlalchemy import or_
+            user_matches = db.query(User.id).filter(
+                or_(User.ho_ten.ilike(kw), User.sdt.ilike(kw), User.email.ilike(kw))
+            ).scalar_subquery()
+            q = q.filter(or_(
+                Booking.ma_dat_san.ilike(kw),
+                Booking.ten_khach_vang_lai.ilike(kw),
+                Booking.sdt_khach_vang_lai.ilike(kw),
+                Booking.email_khach_vang_lai.ilike(kw),
+                Booking.khach_hang_id.in_(user_matches),
+            ))
+
     bookings = q.order_by(Booking.ngay_dat.desc(), Booking.gio_bat_dau.desc()).all()
     return [_booking_to_out(b) for b in bookings]
 
@@ -280,13 +304,25 @@ def complete_booking(
     db: Session = Depends(get_db),
     _: User = Depends(require_roles(UserRole.ADMIN, UserRole.QUAN_LY, UserRole.NHAN_VIEN)),
 ):
-    """Đánh dấu booking hoàn thành (đã sử dụng xong)"""
+    """Đánh dấu booking hoàn thành (đã sử dụng xong). Auto-restock các đồ thuê (la_cho_thue=True)."""
     b = db.query(Booking).filter(Booking.id == booking_id).first()
     if not b:
         raise HTTPException(404, "Không tìm thấy booking")
     if b.trang_thai in (BookingStatus.HUY, BookingStatus.HOAN_THANH):
         raise HTTPException(400, "Không thể đánh dấu hoàn thành")
+
+    # Auto-restock: trả lại tồn kho cho đồ thuê
+    restocked = []
+    for bs in b.booking_services:
+        svc = db.query(Service).filter(Service.id == bs.dich_vu_id).first()
+        if svc and svc.la_cho_thue:
+            svc.ton_kho += bs.so_luong
+            restocked.append(f"{svc.ten_dich_vu} +{bs.so_luong}")
+
     b.trang_thai = BookingStatus.HOAN_THANH
+    if restocked:
+        note = f"[AUTO-RESTOCK {datetime.now().strftime('%H:%M %d/%m/%Y')}] " + ", ".join(restocked)
+        b.ghi_chu = (b.ghi_chu + "\n" + note) if b.ghi_chu else note
     db.commit()
     db.refresh(b)
     return _booking_to_out(b)
@@ -388,9 +424,11 @@ def create_guest_booking(payload: GuestBookingCreate, db: Session = Depends(get_
 
     giam_gia = Decimal(0)
     if khach_hang_id:
-        mem = get_active_membership(db, khach_hang_id)
-        if mem:
-            rate = get_discount_rate(mem.loai_the.value)
+        from app.utils.helpers import calculate_lifetime_spend, calculate_tier_from_spend
+        spend = calculate_lifetime_spend(db, khach_hang_id)
+        tier = calculate_tier_from_spend(spend)
+        rate = get_discount_rate(tier)
+        if rate > 0:
             giam_gia = (tien_san * Decimal(str(rate))).quantize(Decimal("1"))
 
     tong_cong = tien_san + tien_dich_vu - giam_gia

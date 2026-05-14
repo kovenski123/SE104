@@ -142,9 +142,36 @@ Sau khi chạy `python seed.py`, các tài khoản sau được tạo sẵn:
 - **Slot duration:** linh hoạt — 0.5h, 1h, 1.5h, 2h, 2.5h, 3h
 - **Hủy >24h:** hoàn 50% tiền sân
 - **Hủy <24h:** không hoàn tiền
-- **Giảm giá thẻ:** chỉ áp dụng cho tiền sân, không áp dụng dịch vụ
 - **Phân ca:** lập tối thiểu 24h trước
-- **Email reminder:** tự động gửi 30 phút trước giờ chơi (cho user đã đăng ký + guest có nhập email)
+- **Email reminder:** tự động gửi 30 phút trước giờ chơi
+- **Email login/register:** bắt buộc `@gmail.com` (trừ tài khoản staff `@sanbong.vn`)
+
+## 🏆 Hệ thống Tier Thành Viên (tự động)
+
+Tier được **tự tính theo tổng tiền sân đã chi** (lifetime spend từ các booking hoàn thành), không cần đăng ký:
+
+| Tier | Mốc tích lũy | Giảm giá |
+|---|---|---|
+| Thường | 0đ | 0% |
+| 🥈 **Bạc** | > 1.000.000đ | 5% |
+| 🥇 **Vàng** | > 3.000.000đ | 10% |
+| 💎 **Kim Cương** | > 7.000.000đ | 15% |
+
+- Discount tự áp dụng vào tiền sân mỗi lần đặt (không áp cho dịch vụ)
+- Trang `/membership`: card thẻ thành viên + progress bar tới mốc kế tiếp
+
+## 🔄 Auto-Restock Đồ Thuê
+
+- Service có flag `la_cho_thue=true` (giày, áo tập) → khi booking **hoàn thành**, tồn kho tự cộng lại số lượng đã thuê
+- Service `la_cho_thue=false` (nước, đồ tiêu hao) → trừ kho vĩnh viễn
+- Admin có thể bật/tắt flag này khi tạo/sửa dịch vụ
+
+## 🔍 Booking Audit (Admin/Staff)
+
+Trang `/admin/bookings` có search bar:
+- Tìm theo mã booking, tên khách, SĐT, email
+- Lọc theo trạng thái + khoảng ngày
+- Khách hàng chỉ thấy booking của riêng mình
 
 ## 📧 Cấu hình Email Reminder (tuỳ chọn)
 

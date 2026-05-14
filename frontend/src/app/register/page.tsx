@@ -17,6 +17,10 @@ export default function RegisterPage() {
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setErr("");
+    if (!form.email.toLowerCase().endsWith("@gmail.com")) {
+      setErr("Vui lòng dùng email Gmail (@gmail.com)");
+      return;
+    }
     setLoading(true);
     try {
       const res = await apiPost("/api/auth/register", form);
@@ -47,9 +51,10 @@ export default function RegisterPage() {
               <input value={form.ho_ten} onChange={(e) => up("ho_ten", e.target.value)} required
                 className="input" placeholder="Nguyễn Văn A" />
             </Field>
-            <Field label="Email" required>
+            <Field label="Email (Gmail)" required>
               <input type="email" value={form.email} onChange={(e) => up("email", e.target.value)} required
-                className="input" placeholder="email@example.com" />
+                pattern=".+@gmail\.com"
+                className="input" placeholder="ban@gmail.com" />
             </Field>
             <Field label="Số điện thoại" required>
               <input value={form.sdt} onChange={(e) => up("sdt", e.target.value)} required

@@ -13,6 +13,10 @@ router = APIRouter(prefix="/api/auth", tags=["Auth"])
 
 @router.post("/register", response_model=Token)
 def register(payload: UserRegister, db: Session = Depends(get_db)):
+    # Enforce @gmail.com cho user thường (khách hàng tự đăng ký)
+    if not payload.email.lower().endswith("@gmail.com"):
+        raise HTTPException(400, "Vui lòng dùng email Gmail (@gmail.com)")
+
     # Kiểm tra trùng email/sdt
     if db.query(User).filter(User.email == payload.email).first():
         raise HTTPException(400, "Email đã được sử dụng")

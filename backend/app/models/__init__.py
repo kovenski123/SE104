@@ -80,6 +80,7 @@ class Service(Base):
     don_gia = Column(Numeric(12, 2), nullable=False)
     don_vi_tinh = Column(String(20), nullable=False)
     ton_kho = Column(Integer, nullable=False, default=0)
+    la_cho_thue = Column(Boolean, nullable=False, default=False)  # True nếu là đồ thuê (giày, áo) - restock khi xong
     trang_thai = Column(SQLEnum(ServiceStatus), nullable=False, default=ServiceStatus.HOAT_DONG)
     ngay_tao = Column(DateTime, default=datetime.utcnow)
 
