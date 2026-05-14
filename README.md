@@ -1,8 +1,8 @@
 # ⚽ Hệ thống Đặt lịch & Quản lý Sân bóng
 
 **Đồ án môn SE104 — Đặc tả yêu cầu phần mềm**
-**Nhóm SE104.Q28 — Trường Đại học Công nghệ Thông tin (UIT)**
-**GVHD: ThS. Đỗ Văn Tiến**
+**Nhóm SE104 — Trường Đại học Công nghệ Thông tin (UIT)**
+
 
 ## 🎯 Giới thiệu
 
