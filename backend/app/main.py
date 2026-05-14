@@ -1,18 +1,44 @@
+import asyncio
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+
+# Load .env nếu có
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
 from app.core.database import Base, engine
 from app.routers import (
     auth, users, fields, bookings, services,
     invoices, memberships, shifts, feedbacks, reports
 )
+from app.utils.scheduler import reminder_loop
 
 # Tạo tables
 Base.metadata.create_all(bind=engine)
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup: chạy scheduler background
+    task = asyncio.create_task(reminder_loop())
+    yield
+    # Shutdown: hủy task
+    task.cancel()
+    try:
+        await task
+    except asyncio.CancelledError:
+        pass
+
+
 app = FastAPI(
     title="Sân Bóng API",
     description="API quản lý đặt lịch và vận hành sân bóng",
-    version="1.0.0",
+    version="1.1.0",
+    lifespan=lifespan,
 )
 
 app.add_middleware(
@@ -39,7 +65,7 @@ app.include_router(reports.router)
 def root():
     return {
         "name": "San Bong API",
-        "version": "1.0.0",
+        "version": "1.1.0",
         "docs": "/docs",
     }
 

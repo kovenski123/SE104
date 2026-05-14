@@ -52,6 +52,8 @@ class Booking(Base):
     khach_hang_id = Column(Integer, ForeignKey("users.id"), nullable=True)  # null = khách vãng lai
     ten_khach_vang_lai = Column(String(100))  # nếu khách vãng lai
     sdt_khach_vang_lai = Column(String(15))
+    email_khach_vang_lai = Column(String(120))  # email khách guest để gửi reminder
+    reminder_sent = Column(Boolean, nullable=False, default=False)  # đã gửi reminder chưa
     ngay_dat = Column(Date, nullable=False)
     gio_bat_dau = Column(Time, nullable=False)
     gio_ket_thuc = Column(Time, nullable=False)

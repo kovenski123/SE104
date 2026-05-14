@@ -98,14 +98,14 @@ def calculate_membership_fee(loai_the: str, thang: int) -> Decimal:
 
 
 def is_valid_booking_time(start: time, end: time) -> tuple[bool, str]:
-    """Quy định 3.2: bước 30 phút, tối thiểu 1h, tối đa 3h"""
+    """Quy định: bước 30 phút, tối thiểu 0.5h (30 phút), tối đa 3h"""
     if start.minute not in (0, 30) or end.minute not in (0, 30):
         return False, "Giờ đặt phải theo bước 30 phút"
     hours = calculate_hours(start, end)
-    if hours < 1:
-        return False, "Đặt sân tối thiểu 1 tiếng"
-    if hours > 3:
-        return False, "Đặt sân tối đa 3 tiếng"
     if hours <= 0:
         return False, "Giờ kết thúc phải sau giờ bắt đầu"
+    if hours < 0.5:
+        return False, "Đặt sân tối thiểu 30 phút"
+    if hours > 3:
+        return False, "Đặt sân tối đa 3 tiếng"
     return True, ""

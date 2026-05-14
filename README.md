@@ -138,11 +138,36 @@ Sau khi chạy `python seed.py`, các tài khoản sau được tạo sẵn:
 ## 📐 Quy định nghiệp vụ
 
 - **Giờ cao điểm:** 17:00 – 22:00 (giá riêng)
-- **Đặt sân:** tối thiểu 1h, tối đa 3h, bước 30 phút
+- **Đặt sân:** tối thiểu 30 phút (0.5h), tối đa 3h, bước 30 phút
+- **Slot duration:** linh hoạt — 0.5h, 1h, 1.5h, 2h, 2.5h, 3h
 - **Hủy >24h:** hoàn 50% tiền sân
 - **Hủy <24h:** không hoàn tiền
 - **Giảm giá thẻ:** chỉ áp dụng cho tiền sân, không áp dụng dịch vụ
 - **Phân ca:** lập tối thiểu 24h trước
+- **Email reminder:** tự động gửi 30 phút trước giờ chơi (cho user đã đăng ký + guest có nhập email)
+
+## 📧 Cấu hình Email Reminder (tuỳ chọn)
+
+Mặc định: reminder được **log ra console** terminal backend (đủ dùng demo).
+
+Để gửi **email thật** qua Gmail:
+1. Bật 2FA: https://myaccount.google.com/security
+2. Tạo App Password: https://myaccount.google.com/apppasswords
+3. Copy `backend/.env.example` → `backend/.env` rồi điền:
+```env
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=your@gmail.com
+SMTP_PASSWORD=your-16-char-app-password
+SMTP_FROM=Sân Bóng UIT <your@gmail.com>
+```
+4. Restart backend → reminder sẽ gửi qua Gmail thật.
+
+Reminder logic:
+- Background scheduler quét DB mỗi 60 giây
+- Tìm bookings có `gio_bat_dau` cách hiện tại ~30 phút (cửa sổ ±5 phút)
+- Chỉ gửi 1 lần (flag `reminder_sent`)
+- Admin có thể force gửi ngay qua endpoint `POST /api/bookings/{id}/send-reminder-now`
 
 ## 🧪 Kiểm thử nhanh
 

@@ -3,21 +3,26 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Navbar from "@/components/Navbar";
 import { apiGet, apiPost, formatVND } from "@/lib/api";
-import { AlertCircle, CheckCircle2, MapPin, Phone, User as UserIcon, Wifi, Car, Coffee, Loader2 } from "lucide-react";
+import { AlertCircle, CheckCircle2, MapPin, Phone, User as UserIcon, Mail, Wifi, Car, Coffee, Loader2 } from "lucide-react";
 
-// Slot 1.5h từ 6:00 đến 22:30
-const SLOTS: { gbd: string; gkt: string; label: string }[] = [];
-for (let h = 6; h < 22; h += 1.5) {
-  const sh = Math.floor(h);
-  const sm = h % 1 === 0 ? 0 : 30;
-  const eh = Math.floor(h + 1.5);
-  const em = (h + 1.5) % 1 === 0 ? 0 : 30;
-  const fmt = (a: number, b: number) => `${String(a).padStart(2, "0")}:${String(b).padStart(2, "0")}`;
-  SLOTS.push({
-    gbd: fmt(sh, sm),
-    gkt: fmt(eh, em),
-    label: `${fmt(sh, sm)} - ${fmt(eh, em)}`,
-  });
+// Giờ bắt đầu: mỗi 30 phút từ 6:00 đến 22:00
+const START_TIMES: string[] = [];
+for (let h = 6; h <= 22; h++) {
+  for (const m of [0, 30]) {
+    if (h === 22 && m === 30) continue; // Bỏ slot 22:30 (chơi tối thiểu 30p thì kết thúc 23:00 quá giờ)
+    START_TIMES.push(`${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`);
+  }
+}
+
+// Duration options: 0.5h tới 3h, bước 30 phút
+const DURATIONS = [0.5, 1, 1.5, 2, 2.5, 3];
+
+function addDuration(start: string, hours: number): string {
+  const [h, m] = start.split(":").map(Number);
+  const totalMin = h * 60 + m + hours * 60;
+  const eh = Math.floor(totalMin / 60);
+  const em = totalMin % 60;
+  return `${String(eh).padStart(2, "0")}:${String(em).padStart(2, "0")}`;
 }
 
 const DAY_LABELS = ["Chủ nhật", "Thứ 2", "Thứ 3", "Thứ 4", "Thứ 5", "Thứ 6", "Thứ 7"];
@@ -48,10 +53,12 @@ export default function BookingPage() {
   const [activeField, setActiveField] = useState<Field | null>(null);
   const [dateOffset, setDateOffset] = useState(0); // 0..6 từ hôm nay
   const [bookedRanges, setBookedRanges] = useState<{ s: number; e: number }[]>([]);
-  const [selectedSlot, setSelectedSlot] = useState<{ gbd: string; gkt: string; label: string } | null>(null);
+  const [startTime, setStartTime] = useState<string | null>(null);
+  const [duration, setDuration] = useState<number>(1); // mặc định 1 tiếng
   const [chosenSvc, setChosenSvc] = useState<Record<number, number>>({});
   const [tenKhach, setTenKhach] = useState("");
   const [sdtKhach, setSdtKhach] = useState("");
+  const [emailKhach, setEmailKhach] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [err, setErr] = useState("");
   const [loadErr, setLoadErr] = useState("");
@@ -91,7 +98,7 @@ export default function BookingPage() {
   // Load schedule khi field/date đổi
   useEffect(() => {
     if (!activeField) return;
-    setSelectedSlot(null);
+    setStartTime(null);
     apiGet(`/api/fields/${activeField.id}/schedule?ngay=${dateStr}`)
       .then((r) => {
         const ranges = r.bookings.map((b: any) => {
@@ -112,6 +119,15 @@ export default function BookingPage() {
     return bookedRanges.some((b) => s < b.e && e > b.s);
   }
 
+  /** Kiểm tra một slot start có khả dụng (đủ chỗ cho duration đã chọn, không quá 23:00) */
+  function isStartAvailable(start: string, dur: number): boolean {
+    const end = addDuration(start, dur);
+    const [eh, em] = end.split(":").map(Number);
+    const endMin = eh * 60 + em;
+    if (endMin > 23 * 60) return false; // Sân đóng cửa 23:00
+    return !isSlotBooked(start, end);
+  }
+
   function setQty(svcId: number, qty: number) {
     setChosenSvc((c) => {
       const n = { ...c };
@@ -122,10 +138,12 @@ export default function BookingPage() {
   }
 
   // Tính tiền
+  const endTime = useMemo(() => startTime ? addDuration(startTime, duration) : null, [startTime, duration]);
+
   const tienSan = useMemo(() => {
-    if (!activeField || !selectedSlot) return 0;
-    const [sh, sm] = selectedSlot.gbd.split(":").map(Number);
-    const [eh, em] = selectedSlot.gkt.split(":").map(Number);
+    if (!activeField || !startTime || !endTime) return 0;
+    const [sh, sm] = startTime.split(":").map(Number);
+    const [eh, em] = endTime.split(":").map(Number);
     const start = sh * 60 + sm;
     const end = eh * 60 + em;
     const peak = 17 * 60;
@@ -139,7 +157,7 @@ export default function BookingPage() {
       total += ((end - pb) / 60) * activeField.gia_cao_diem;
     }
     return total;
-  }, [activeField, selectedSlot]);
+  }, [activeField, startTime, endTime]);
 
   const tienDV = useMemo(() => {
     return Object.entries(chosenSvc).reduce((sum, [id, qty]) => {
@@ -153,19 +171,24 @@ export default function BookingPage() {
   async function submit() {
     setErr("");
     if (!activeField) { setErr("Vui lòng chọn sân"); return; }
-    if (!selectedSlot) { setErr("Vui lòng chọn khung giờ"); return; }
+    if (!startTime || !endTime) { setErr("Vui lòng chọn giờ bắt đầu"); return; }
     if (!tenKhach.trim()) { setErr("Vui lòng nhập họ tên"); return; }
     if (!/^0\d{9}$/.test(sdtKhach)) { setErr("SĐT phải gồm 10 số, bắt đầu bằng 0"); return; }
+    if (emailKhach.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailKhach)) {
+      setErr("Email không hợp lệ");
+      return;
+    }
 
     setSubmitting(true);
     try {
       const res = await apiPost("/api/bookings/guest", {
         san_id: activeField.id,
         ngay_dat: dateStr,
-        gio_bat_dau: selectedSlot.gbd + ":00",
-        gio_ket_thuc: selectedSlot.gkt + ":00",
+        gio_bat_dau: startTime + ":00",
+        gio_ket_thuc: endTime + ":00",
         ten_khach: tenKhach,
         sdt_khach: sdtKhach,
+        email_khach: emailKhach.trim() || null,
         services: Object.entries(chosenSvc).map(([id, qty]) => ({
           dich_vu_id: parseInt(id), so_luong: qty,
         })),
@@ -345,25 +368,47 @@ uvicorn app.main:app --reload`}
             </div>
           </div>
 
-          {/* Slot grid */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 mb-5">
-            {SLOTS.map((s) => {
-              const booked = isSlotBooked(s.gbd, s.gkt);
-              const isPeak = parseInt(s.gbd.split(":")[0]) >= 17;
-              const isSelected = selectedSlot?.gbd === s.gbd;
+          {/* Duration picker */}
+          <div className="mb-4">
+            <h3 className="text-sm font-bold text-ink-900 mb-2">1. Chọn thời lượng chơi</h3>
+            <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+              {DURATIONS.map((d) => (
+                <button key={d} onClick={() => setDuration(d)}
+                  className={`px-3 py-2.5 rounded border-2 text-sm font-semibold transition ${
+                    duration === d
+                      ? "bg-red-700 text-white border-red-700"
+                      : "bg-white border-neutral-300 hover:border-red-400"
+                  }`}>
+                  {d === 0.5 ? "30 phút" : `${d} giờ`}
+                </button>
+              ))}
+            </div>
+            <p className="text-xs text-ink-400 mt-1.5">Slot 30 phút — chọn từ 30 phút tới 3 giờ.</p>
+          </div>
+
+          {/* Start time grid */}
+          <h3 className="text-sm font-bold text-ink-900 mb-2">2. Chọn giờ bắt đầu</h3>
+          <div className="grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-7 gap-2 mb-5">
+            {START_TIMES.map((t) => {
+              const end = addDuration(t, duration);
+              const available = isStartAvailable(t, duration);
+              const isPeak = parseInt(t.split(":")[0]) >= 17;
+              const isSelected = startTime === t;
               return (
-                <button key={s.gbd} disabled={booked}
-                  onClick={() => setSelectedSlot(s)}
-                  className={`slot ${booked ? "disabled" : ""} px-3 py-2.5 rounded border-2 text-sm font-medium ${
+                <button key={t} disabled={!available}
+                  onClick={() => setStartTime(t)}
+                  className={`slot ${!available ? "disabled" : ""} px-2 py-2 rounded border-2 text-xs sm:text-sm font-medium ${
                     isSelected
                       ? "bg-red-700 text-white border-red-700"
-                      : booked
+                      : !available
                       ? "bg-red-100 text-red-700 border-red-300"
                       : isPeak
                       ? "bg-amber-50 border-amber-400 text-amber-800 hover:bg-amber-100"
                       : "bg-white border-neutral-300 hover:border-neutral-500"
-                  }`}>
-                  {s.label}
+                  }`}
+                  title={available ? `${t} - ${end}` : "Không khả dụng"}>
+                  <div className="font-bold">{t}</div>
+                  <div className="text-[10px] opacity-75">→ {end}</div>
                 </button>
               );
             })}
@@ -422,6 +467,14 @@ uvicorn app.main:app --reload`}
                   placeholder="0901234567" maxLength={10}
                   className="w-full px-3 py-2.5 rounded border border-neutral-300 focus:border-red-700 focus:ring-2 focus:ring-red-100 outline-none transition" />
               </div>
+              <div className="sm:col-span-2">
+                <label className="text-sm font-medium text-ink-700 mb-1.5 flex items-center gap-1.5">
+                  <Mail size={14} /> Email <span className="text-ink-400 font-normal">(tuỳ chọn — để nhận nhắc lịch 30 phút trước giờ chơi)</span>
+                </label>
+                <input value={emailKhach} onChange={(e) => setEmailKhach(e.target.value)}
+                  placeholder="ban@email.com" type="email"
+                  className="w-full px-3 py-2.5 rounded border border-neutral-300 focus:border-red-700 focus:ring-2 focus:ring-red-100 outline-none transition" />
+              </div>
             </div>
           </div>
 
@@ -430,7 +483,7 @@ uvicorn app.main:app --reload`}
             <div className="text-sm space-y-1.5 mb-3">
               <SumRow label="Sân" value={activeField.ten_san} />
               <SumRow label="Ngày" value={`${targetDate.getDate()}/${targetDate.getMonth() + 1}/${targetDate.getFullYear()}`} />
-              <SumRow label="Khung giờ" value={selectedSlot?.label || "—"} />
+              <SumRow label="Khung giờ" value={startTime && endTime ? `${startTime} - ${endTime} (${duration === 0.5 ? "30 phút" : duration + " giờ"})` : "—"} />
               <SumRow label="Tiền sân" value={formatVND(tienSan)} />
               <SumRow label="Tiền dịch vụ" value={formatVND(tienDV)} />
             </div>
@@ -444,7 +497,7 @@ uvicorn app.main:app --reload`}
             <div className="mb-3 p-3 rounded bg-red-50 border border-red-200 text-red-700 text-sm">{err}</div>
           )}
 
-          <button onClick={submit} disabled={submitting || !selectedSlot}
+          <button onClick={submit} disabled={submitting || !startTime}
             className="w-full py-3.5 bg-red-700 hover:bg-red-800 text-white rounded font-bold text-base disabled:opacity-50 disabled:cursor-not-allowed transition">
             {submitting ? "Đang xử lý..." : "Đặt sân →"}
           </button>
