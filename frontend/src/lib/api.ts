@@ -34,7 +34,14 @@ export async function api(path: string, options: RequestInit = {}): Promise<any>
   };
   if (token) headers["Authorization"] = `Bearer ${token}`;
 
-  const res = await fetch(`${API_URL}${path}`, { ...options, headers });
+  let res: Response;
+  try {
+    res = await fetch(`${API_URL}${path}`, { ...options, headers });
+  } catch (err: any) {
+    throw new Error(
+      `Không kết nối được tới backend (${API_URL}). Kiểm tra: 1) uvicorn đã chạy chưa? 2) cổng 8000 đúng chưa?`
+    );
+  }
   const ct = res.headers.get("content-type") || "";
   const body = ct.includes("application/json") ? await res.json() : await res.text();
 

@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Navbar from "@/components/Navbar";
 import { apiGet, apiPost, formatVND } from "@/lib/api";
-import { CheckCircle2, MapPin, Phone, User as UserIcon, Wifi, Car, Coffee, Loader2 } from "lucide-react";
+import { AlertCircle, CheckCircle2, MapPin, Phone, User as UserIcon, Wifi, Car, Coffee, Loader2 } from "lucide-react";
 
 // Slot 1.5h từ 6:00 đến 22:30
 const SLOTS: { gbd: string; gkt: string; label: string }[] = [];
@@ -54,6 +54,7 @@ export default function BookingPage() {
   const [sdtKhach, setSdtKhach] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [err, setErr] = useState("");
+  const [loadErr, setLoadErr] = useState("");
 
   // Date hiện tại
   const targetDate = useMemo(() => {
@@ -68,11 +69,23 @@ export default function BookingPage() {
     Promise.all([
       apiGet("/api/fields?trang_thai=HOAT_DONG"),
       apiGet("/api/services?trang_thai=HOAT_DONG"),
-    ]).then(([f, s]) => {
-      setFields(f);
-      setServices(s);
-      if (f.length > 0) setActiveField(f[0]);
-    });
+    ])
+      .then(([f, s]) => {
+        setFields(f);
+        setServices(s);
+        if (f.length > 0) {
+          setActiveField(f[0]);
+        } else {
+          setLoadErr("Hệ thống chưa có dữ liệu sân. Vui lòng chạy `python seed.py` ở backend.");
+        }
+      })
+      .catch((e: any) => {
+        setLoadErr(
+          e.message?.includes("Failed to fetch") || e.message?.includes("NetworkError")
+            ? "Không kết nối được tới backend (cổng 8000). Kiểm tra `uvicorn` đã chạy chưa."
+            : `Lỗi tải dữ liệu: ${e.message}`
+        );
+      });
   }, []);
 
   // Load schedule khi field/date đổi
@@ -165,6 +178,35 @@ export default function BookingPage() {
     }
   }
 
+  if (loadErr) {
+    return (
+      <>
+        <Navbar />
+        <div className="max-w-2xl mx-auto p-6 mt-8">
+          <div className="bg-red-50 border border-red-300 rounded-lg p-5">
+            <div className="flex items-start gap-3">
+              <AlertCircle className="text-red-600 shrink-0 mt-0.5" />
+              <div>
+                <h3 className="font-bold text-red-700 mb-1">Không tải được dữ liệu</h3>
+                <p className="text-sm text-red-700 mb-3">{loadErr}</p>
+                <div className="bg-white border border-red-200 rounded p-3 text-xs text-ink-700 font-mono whitespace-pre">
+{`# Mở terminal mới ở folder backend rồi chạy:
+cd backend
+python seed.py
+uvicorn app.main:app --reload`}
+                </div>
+                <button onClick={() => window.location.reload()}
+                  className="mt-3 px-4 py-2 bg-red-700 text-white rounded text-sm font-semibold hover:bg-red-800">
+                  Tải lại trang
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </>
+    );
+  }
+
   if (!activeField) {
     return (
       <>
@@ -205,7 +247,7 @@ export default function BookingPage() {
         <div className="grid md:grid-cols-3 gap-5 mb-6">
           {/* Preview (CSS pitch) */}
           <div className="md:col-span-2">
-            <PitchPreview field={activeField} />
+            <PitchPreview field={activeField} allFields={fields} />
             {/* Thumbnails */}
             <div className="grid grid-cols-6 gap-2 mt-2">
               {fields.slice(0, 6).map((f) => (
@@ -213,7 +255,7 @@ export default function BookingPage() {
                   className={`aspect-[4/3] rounded border-2 overflow-hidden transition ${
                     activeField.id === f.id ? "border-red-700" : "border-neutral-200 hover:border-neutral-400"
                   }`}>
-                  <PitchMini field={f} />
+                  <PitchMini field={f} allFields={fields} />
                 </button>
               ))}
             </div>
@@ -447,32 +489,24 @@ function SumRow({ label, value }: { label: string; value: string }) {
   );
 }
 
-function PitchPreview({ field }: { field: Field }) {
-  const colors: Record<string, string> = {
-    SAN_5: "from-emerald-600 to-emerald-800",
-    SAN_7: "from-green-700 to-green-900",
-    SAN_11: "from-teal-700 to-emerald-900",
-  };
-  const grad = colors[field.loai_san] || colors.SAN_5;
-  return (
-    <div className={`fade-in relative aspect-[16/9] rounded-lg overflow-hidden bg-gradient-to-br ${grad} border border-neutral-200`}>
-      {/* Pitch markings */}
-      <div className="absolute inset-6 border-2 border-white/40 rounded-sm" />
-      <div className="absolute inset-y-6 left-1/2 w-px bg-white/40" />
-      <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-24 h-24 border-2 border-white/40 rounded-full" />
-      <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-2 h-2 bg-white/70 rounded-full" />
-      {/* Penalty boxes */}
-      <div className="absolute top-1/2 left-6 -translate-y-1/2 w-12 h-32 border-2 border-l-0 border-white/40" />
-      <div className="absolute top-1/2 right-6 -translate-y-1/2 w-12 h-32 border-2 border-r-0 border-white/40" />
+function PitchPreview({ field, allFields }: { field: Field; allFields: Field[] }) {
+  const idx = allFields.findIndex((f) => f.id === field.id);
+  const imgIdx = (idx >= 0 ? idx : 0) % 6 + 1;
+  const imgSrc = `/fields/img-${imgIdx}.jpg`;
 
+  return (
+    <div className="fade-in relative aspect-[16/9] rounded-lg overflow-hidden bg-neutral-200 border border-neutral-200">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={imgSrc} alt={field.ten_san}
+        className="absolute inset-0 w-full h-full object-cover" />
       <div className="pitch-overlay absolute inset-0" />
 
-      <div className="absolute bottom-4 left-5 text-white">
-        <div className="text-2xl md:text-3xl font-bold drop-shadow">{field.ten_san}</div>
-        <div className="text-sm opacity-90 drop-shadow">
+      <div className="absolute bottom-4 left-5 right-5 text-white">
+        <div className="text-2xl md:text-3xl font-bold drop-shadow-lg">{field.ten_san}</div>
+        <div className="text-sm opacity-95 drop-shadow">
           {field.loai_san === "SAN_5" ? "Sân 5 người" : field.loai_san === "SAN_7" ? "Sân 7 người" : "Sân 11 người"} · Sức chứa {field.suc_chua} người
         </div>
-        {field.mo_ta && <div className="text-xs opacity-75 mt-1 drop-shadow">{field.mo_ta}</div>}
+        {field.mo_ta && <div className="text-xs opacity-90 mt-1 drop-shadow line-clamp-1">{field.mo_ta}</div>}
       </div>
 
       <div className="absolute top-3 right-3 bg-white/95 rounded px-2.5 py-1 text-xs font-bold text-red-700 shadow">
@@ -482,18 +516,18 @@ function PitchPreview({ field }: { field: Field }) {
   );
 }
 
-function PitchMini({ field }: { field: Field }) {
-  const colors: Record<string, string> = {
-    SAN_5: "from-emerald-600 to-emerald-800",
-    SAN_7: "from-green-700 to-green-900",
-    SAN_11: "from-teal-700 to-emerald-900",
-  };
-  const grad = colors[field.loai_san] || colors.SAN_5;
+function PitchMini({ field, allFields }: { field: Field; allFields: Field[] }) {
+  const idx = allFields.findIndex((f) => f.id === field.id);
+  const imgIdx = (idx >= 0 ? idx : 0) % 6 + 1;
+  const imgSrc = `/fields/img-${imgIdx}.jpg`;
+
   return (
-    <div className={`relative w-full h-full bg-gradient-to-br ${grad} flex items-center justify-center`}>
-      <div className="absolute inset-1 border border-white/40 rounded-sm" />
-      <div className="absolute inset-y-1 left-1/2 w-px bg-white/40" />
-      <span className="relative text-white text-[10px] font-bold drop-shadow">
+    <div className="relative w-full h-full bg-neutral-200">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={imgSrc} alt={field.ten_san}
+        className="absolute inset-0 w-full h-full object-cover" />
+      <div className="absolute inset-0 bg-black/20" />
+      <span className="absolute bottom-1 left-1 right-1 text-white text-[10px] font-bold drop-shadow text-center">
         {field.ten_san.split(" - ")[0]}
       </span>
     </div>

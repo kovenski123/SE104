@@ -151,12 +151,38 @@ Sau khi chạy `python seed.py`, các tài khoản sau được tạo sẵn:
 3. Đăng nhập bằng admin → vào **/admin** xem dashboard, báo cáo, biểu đồ
 4. Đăng nhập bằng `quen@gmail.com` → đặt sân để thấy giảm giá 10% từ thẻ Vàng
 
-## 🐛 Khắc phục sự cố
+## 🐛 Khắc phục sự cố thường gặp
 
-- **Lỗi `bcrypt` khi seed:** đã chuyển sang dùng `bcrypt` trực tiếp (không qua `passlib`) — chỉ cần `pip install -r requirements.txt` lại.
-- **Port 8000/3000 bận:** đổi port bằng `--port` (uvicorn) hoặc `PORT=3001 npm run dev`.
-- **Reset DB:** xóa `backend/san_bong.db` rồi chạy lại `python seed.py`.
+### ❗ Lỗi 1: Login/Register "không phản hồi", hoặc Booking page kẹt loading
+**Nguyên nhân:** Database trống — chưa chạy `seed.py` hoặc DB bị xoá.
+
+**Fix:** Chạy lại seed:
+```bash
+cd backend
+rm san_bong.db      # (Windows: del san_bong.db)
+python seed.py
+# Rồi restart backend
+```
+
+Hoặc dùng quickstart script:
+- **Mac/Linux:** `bash backend/quickstart.sh`
+- **Windows:** double-click `backend/quickstart.bat`
+
+### ❗ Lỗi 2: "Không kết nối được tới backend"
+**Nguyên nhân:** Backend chưa chạy hoặc sai cổng.
+
+**Fix:**
+```bash
+cd backend
+uvicorn app.main:app --reload --port 8000
+```
+Sau đó mở http://localhost:8000/api/health — phải thấy `{"status":"ok"}`.
+
+### ❗ Lỗi khác
+- **`bcrypt` install fail:** thử `pip install bcrypt==4.2.0 --break-system-packages`
+- **Port 8000/3000 bận:** đổi port bằng `--port 8001` (uvicorn) hoặc `PORT=3001 npm run dev`
 - **CORS:** backend đã mở `localhost:3000`. Đổi nếu frontend chạy port khác trong `app/main.py`.
+- **Frontend cache cũ:** xoá `frontend/.next/` rồi `npm run dev` lại.
 
 ## 👥 Thành viên nhóm
 
