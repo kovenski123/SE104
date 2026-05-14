@@ -1,0 +1,170 @@
+# ⚽ Hệ thống Đặt lịch & Quản lý Sân bóng
+
+**Đồ án môn SE104 — Đặc tả yêu cầu phần mềm**
+**Nhóm SE104.Q28 — Trường Đại học Công nghệ Thông tin (UIT)**
+**GVHD: ThS. Đỗ Văn Tiến**
+
+## 🎯 Giới thiệu
+
+Website cho phép khách hàng đặt sân online 24/7, đồng thời cung cấp công cụ quản trị đầy đủ cho chủ sân: quản lý sân, dịch vụ, nhân viên, hóa đơn, thẻ thành viên, ca trực, đánh giá, và báo cáo thống kê.
+
+Đáp ứng đầy đủ **9 chức năng nghiệp vụ** trong tài liệu đặc tả.
+
+## 🛠️ Công nghệ
+
+| Lớp | Công nghệ |
+|---|---|
+| **Backend** | FastAPI 0.115 + SQLAlchemy 2.0 + SQLite + JWT |
+| **Frontend** | Next.js 14 (App Router) + TypeScript + TailwindCSS |
+| **Biểu đồ** | Recharts |
+| **Icon** | Lucide React |
+| **Font** | Bebas Neue + Plus Jakarta Sans |
+
+## 📁 Cấu trúc dự án
+
+```
+san-bong/
+├── backend/                # FastAPI + SQLite
+│   ├── app/
+│   │   ├── core/          # config, database, security
+│   │   ├── models/        # SQLAlchemy models
+│   │   ├── schemas/       # Pydantic schemas
+│   │   ├── routers/       # API endpoints (10 routers)
+│   │   ├── utils/         # helpers (tính tiền, mã, ...)
+│   │   └── main.py        # Entry point
+│   ├── requirements.txt
+│   └── seed.py            # Tạo dữ liệu mẫu
+│
+└── frontend/              # Next.js 14
+    ├── src/
+    │   ├── app/
+    │   │   ├── page.tsx           # Trang chủ
+    │   │   ├── login/             # Đăng nhập
+    │   │   ├── register/          # Đăng ký
+    │   │   ├── booking/           # Đặt sân (grid lịch)
+    │   │   ├── my-bookings/       # Lịch của tôi
+    │   │   ├── feedback/          # Đánh giá public
+    │   │   ├── membership/        # Thẻ thành viên
+    │   │   └── admin/             # Khu vực quản trị
+    │   │       ├── page.tsx       # Dashboard
+    │   │       ├── bookings/      # QL lịch đặt
+    │   │       ├── fields/        # QL sân
+    │   │       ├── services/      # QL dịch vụ
+    │   │       ├── users/         # QL tài khoản
+    │   │       ├── shifts/        # Phân ca
+    │   │       ├── feedbacks/     # Đánh giá admin
+    │   │       └── reports/       # Báo cáo
+    │   ├── components/Navbar.tsx
+    │   └── lib/api.ts             # Wrapper fetch + auth
+    ├── package.json
+    └── tailwind.config.js
+```
+
+## ⚙️ Yêu cầu môi trường
+
+- **Python 3.10+**
+- **Node.js 18+** & npm
+- 2 cổng trống: `8000` (backend) và `3000` (frontend)
+
+## 🚀 Cách chạy
+
+### 1) Cài & chạy Backend
+
+```bash
+cd backend
+
+# (Khuyến nghị) tạo virtual env
+python3 -m venv .venv
+source .venv/bin/activate          # Linux/Mac
+# .venv\Scripts\activate           # Windows
+
+# Cài thư viện
+pip install -r requirements.txt
+
+# Tạo DB và seed dữ liệu mẫu
+python seed.py
+
+# Chạy server
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+Backend chạy tại: **http://localhost:8000**
+Tài liệu API tự động (Swagger UI): **http://localhost:8000/docs**
+
+### 2) Cài & chạy Frontend
+
+Mở terminal mới:
+
+```bash
+cd frontend
+
+# Cài thư viện
+npm install
+
+# (Tuỳ chọn) Tạo file .env.local nếu backend chạy port khác
+cp .env.local.example .env.local
+
+# Chạy dev server
+npm run dev
+```
+
+Frontend chạy tại: **http://localhost:3000**
+
+## 🔐 Tài khoản demo
+
+Sau khi chạy `python seed.py`, các tài khoản sau được tạo sẵn:
+
+| Vai trò | Email | Mật khẩu | Ghi chú |
+|---|---|---|---|
+| **Admin** | `admin@sanbong.vn` | `admin123` | Toàn quyền |
+| **Quản lý** | `quanly@sanbong.vn` | `quanly123` | Quản trị + báo cáo |
+| **Nhân viên** | `nva@sanbong.vn` | `nhanvien123` | Vận hành |
+| **Nhân viên** | `nvb@sanbong.vn` | `nhanvien123` | Vận hành |
+| **Khách hàng** | `khach@gmail.com` | `khach1234` | Khách thường |
+| **Khách VIP** | `quen@gmail.com` | `khach1234` | Có thẻ Vàng (giảm 10%) |
+
+## ✨ 9 module chức năng
+
+1. **Quản lý hệ thống** — Tài khoản, phân quyền 4 cấp (Admin / Quản lý / Nhân viên / Khách hàng).
+2. **Quản lý sân** — CRUD sân (5/7/11 người), trạng thái Hoạt động / Bảo trì / Đóng cửa.
+3. **Đặt & hủy lịch** — Lưới lịch trực quan, kiểm tra xung đột, chính sách hủy (>24h hoàn 50%).
+4. **Thành viên** — Thẻ Bạc 5% / Vàng 10% / Bạch Kim 15%, gia hạn 1–12 tháng, khuyến mãi theo gói.
+5. **Dịch vụ đi kèm** — Thuê giày, nước uống... với tồn kho, tự trừ khi đặt.
+6. **Thanh toán & hóa đơn** — Tạo hóa đơn tự động, hỗ trợ Tiền mặt + Chuyển khoản, hoàn tiền khi hủy.
+7. **Phân ca nhân viên** — Ca Sáng / Chiều, gắn sân phụ trách, lập trước ≥24h.
+8. **Feedback** — Đánh giá 4 chiều (Tổng / Cơ sở / Nhân viên / Dịch vụ), bộ lọc theo sao.
+9. **Báo cáo & thống kê** — Doanh thu theo ngày/tuần/tháng (biểu đồ), xếp hạng sân, khung giờ cao điểm.
+
+## 📐 Quy định nghiệp vụ
+
+- **Giờ cao điểm:** 17:00 – 22:00 (giá riêng)
+- **Đặt sân:** tối thiểu 1h, tối đa 3h, bước 30 phút
+- **Hủy >24h:** hoàn 50% tiền sân
+- **Hủy <24h:** không hoàn tiền
+- **Giảm giá thẻ:** chỉ áp dụng cho tiền sân, không áp dụng dịch vụ
+- **Phân ca:** lập tối thiểu 24h trước
+
+## 🧪 Kiểm thử nhanh
+
+1. Truy cập http://localhost:3000 → bấm **"Đặt sân ngay"**
+2. Chọn ngày, bấm vào ô **xanh** (còn trống) → đặt sân
+3. Đăng nhập bằng admin → vào **/admin** xem dashboard, báo cáo, biểu đồ
+4. Đăng nhập bằng `quen@gmail.com` → đặt sân để thấy giảm giá 10% từ thẻ Vàng
+
+## 🐛 Khắc phục sự cố
+
+- **Lỗi `bcrypt` khi seed:** đã chuyển sang dùng `bcrypt` trực tiếp (không qua `passlib`) — chỉ cần `pip install -r requirements.txt` lại.
+- **Port 8000/3000 bận:** đổi port bằng `--port` (uvicorn) hoặc `PORT=3001 npm run dev`.
+- **Reset DB:** xóa `backend/san_bong.db` rồi chạy lại `python seed.py`.
+- **CORS:** backend đã mở `localhost:3000`. Đổi nếu frontend chạy port khác trong `app/main.py`.
+
+## 👥 Thành viên nhóm
+
+- Ngô Hoàng Khang — 24520748
+- Võ Huy Khang — 24520772
+- Võ Thanh Nguyên Khang — 24520773
+- Nguyễn Đỗ Hoàng Khang — 24520754
+
+---
+
+*© 2025 — Đồ án SE104 • UIT*
