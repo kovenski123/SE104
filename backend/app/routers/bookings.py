@@ -53,6 +53,7 @@ def _booking_to_out(b: Booking) -> dict:
         "hinh_thuc_thanh_toan": b.hinh_thuc_thanh_toan,
         "trang_thai": b.trang_thai,
         "ly_do_huy": b.ly_do_huy,
+        "hoan_tien": b.hoan_tien,
         "ngay_tao": b.ngay_tao,
         "services": services_out,
     }
@@ -268,16 +269,32 @@ def cancel_booking(
     if b.trang_thai in (BookingStatus.HUY, BookingStatus.HOAN_THANH, BookingStatus.DANG_SU_DUNG):
         raise HTTPException(400, "Booking không thể hủy ở trạng thái hiện tại")
 
-    # Tính giờ còn lại
+    # Tính giờ còn lại (dùng để mặc định nếu admin/staff không chọn override)
     now = datetime.now()
     booking_dt = datetime.combine(b.ngay_dat, b.gio_bat_dau)
     hours_until = (booking_dt - now).total_seconds() / 3600
 
-    # Quy định 3.3: > 24h hoàn 50%, < 24h không hoàn
-    refund_rate = 0.5 if hours_until >= 24 else 0.0
+    # ROLE-BASED REFUND LOGIC:
+    # - Admin/Quản lý/Nhân viên: được phép set hoan_tien=True/False thủ công (override policy)
+    # - Khách hàng: KHÔNG được set; server tự tính theo policy 24h
+    is_staff = user.vai_tro in (UserRole.ADMIN, UserRole.QUAN_LY, UserRole.NHAN_VIEN)
+    if is_staff and payload.hoan_tien is not None:
+        # Staff override quyết định
+        hoan_tien = payload.hoan_tien
+        refund_rate = 0.5 if hoan_tien else 0.0
+        refund_note = f"[QUYẾT ĐỊNH BỞI {user.ho_ten}]"
+    else:
+        # Customer hoặc staff không override → áp policy 24h tự động
+        if payload.hoan_tien is not None and not is_staff:
+            # Customer cố tình gửi flag → ignore, không báo lỗi để giữ backward-compat
+            pass
+        hoan_tien = hours_until >= 24
+        refund_rate = 0.5 if hoan_tien else 0.0
+        refund_note = "[Tự động theo policy 24h]"
 
     b.trang_thai = BookingStatus.HUY
     b.ly_do_huy = payload.ly_do_huy
+    b.hoan_tien = hoan_tien
 
     # Hoàn dịch vụ vào kho (đặc biệt cho thuê giày...)
     for bs in b.booking_services:
@@ -287,11 +304,11 @@ def cancel_booking(
     # Update invoice
     if b.invoice:
         if b.invoice.trang_thai == PaymentStatus.DA_THANH_TOAN and refund_rate > 0:
-            # Lập "hóa đơn hoàn tiền": ghi nhận trạng thái
             b.invoice.trang_thai = PaymentStatus.HOAN_TIEN
             refund_amount = (b.invoice.tong_cong * Decimal(str(refund_rate))).quantize(Decimal("1"))
-            # Lưu số tiền hoàn vào ghi chú booking
-            b.ghi_chu = (b.ghi_chu or "") + f"\n[Hoàn {refund_amount}đ ({int(refund_rate*100)}%)]"
+            b.ghi_chu = (b.ghi_chu or "") + f"\n[Hoàn {refund_amount}đ ({int(refund_rate*100)}%)] {refund_note}"
+        elif not hoan_tien:
+            b.ghi_chu = (b.ghi_chu or "") + f"\n[Không hoàn tiền] {refund_note}"
 
     db.commit()
     db.refresh(b)

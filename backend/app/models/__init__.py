@@ -63,6 +63,7 @@ class Booking(Base):
     hinh_thuc_thanh_toan = Column(SQLEnum(PaymentMethod), nullable=False)
     trang_thai = Column(SQLEnum(BookingStatus), nullable=False, default=BookingStatus.CHO_XAC_NHAN)
     ly_do_huy = Column(Text)
+    hoan_tien = Column(Boolean, nullable=False, default=False)  # Admin/Staff quyết định có hoàn tiền không
     nguoi_tao_id = Column(Integer, ForeignKey("users.id"), nullable=True)  # ai tạo booking (NV hay khách)
     ngay_tao = Column(DateTime, default=datetime.utcnow)
 

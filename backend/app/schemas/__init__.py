@@ -119,6 +119,7 @@ class BookingCreate(BaseModel):
 
 class BookingCancel(BaseModel):
     ly_do_huy: str = Field(..., min_length=3)
+    hoan_tien: Optional[bool] = None  # CHỈ admin/staff được set. Khách hàng để None → server tự tính theo policy 24h.
 
 
 class AvailabilityQuery(BaseModel):
@@ -155,6 +156,7 @@ class BookingOut(BaseModel):
     hinh_thuc_thanh_toan: PaymentMethod
     trang_thai: BookingStatus
     ly_do_huy: Optional[str]
+    hoan_tien: bool = False
     ngay_tao: datetime
     services: List[BookingServiceOut] = []
 

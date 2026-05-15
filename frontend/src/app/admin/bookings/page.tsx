@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { apiGet, apiPost, formatVND, formatDate } from "@/lib/api";
-import { Loader2, CheckCircle2, DollarSign, Search, X, Calendar } from "lucide-react";
+import { Loader2, CheckCircle2, DollarSign, Search, X, Calendar, XCircle, RotateCcw, Ban } from "lucide-react";
 
 const STATUS_LABEL: Record<string, { text: string; cls: string }> = {
   CHO_XAC_NHAN: { text: "Chờ xác nhận", cls: "bg-amber-100 text-amber-800" },
@@ -19,6 +19,7 @@ export default function BookingsAdmin() {
   const [tuNgay, setTuNgay] = useState<string>("");
   const [denNgay, setDenNgay] = useState<string>("");
   const [loading, setLoading] = useState(true);
+  const [cancelTarget, setCancelTarget] = useState<any>(null);
 
   async function load() {
     setLoading(true);
@@ -152,6 +153,7 @@ export default function BookingsAdmin() {
                 <th className="text-left p-3">THỜI GIAN</th>
                 <th className="text-right p-3">TIỀN</th>
                 <th className="text-center p-3">TRẠNG THÁI</th>
+                <th className="text-center p-3">HOÀN TIỀN</th>
                 <th className="p-3"></th>
               </tr>
             </thead>
@@ -178,12 +180,33 @@ export default function BookingsAdmin() {
                         {st?.text}
                       </span>
                     </td>
+                    <td className="p-3 text-center">
+                      {b.trang_thai === "HUY" ? (
+                        b.hoan_tien ? (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">
+                            <RotateCcw size={10} /> Đã hoàn
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-neutral-200 text-neutral-700">
+                            <Ban size={10} /> Không hoàn
+                          </span>
+                        )
+                      ) : (
+                        <span className="text-[10px] text-ink-400">—</span>
+                      )}
+                    </td>
                     <td className="p-3 text-right whitespace-nowrap">
                       {["CHO_XAC_NHAN", "DA_XAC_NHAN"].includes(b.trang_thai) && (
-                        <button onClick={() => payInvoice(b.id)}
-                          className="p-1.5 hover:bg-blue-50 text-blue-600 rounded-lg" title="Thu tiền">
-                          <DollarSign size={14} />
-                        </button>
+                        <>
+                          <button onClick={() => payInvoice(b.id)}
+                            className="p-1.5 hover:bg-blue-50 text-blue-600 rounded-lg" title="Thu tiền">
+                            <DollarSign size={14} />
+                          </button>
+                          <button onClick={() => setCancelTarget(b)}
+                            className="p-1.5 hover:bg-red-50 text-red-600 rounded-lg" title="Hủy booking">
+                            <XCircle size={14} />
+                          </button>
+                        </>
                       )}
                       {b.trang_thai === "DA_XAC_NHAN" && (
                         <button onClick={() => markComplete(b.id)}
@@ -196,7 +219,7 @@ export default function BookingsAdmin() {
                 );
               })}
               {list.length === 0 && (
-                <tr><td colSpan={7} className="p-12 text-center text-ink-400">
+                <tr><td colSpan={8} className="p-12 text-center text-ink-400">
                   {hasFilters ? "Không có booking khớp bộ lọc" : "Chưa có booking"}
                 </td></tr>
               )}
@@ -204,6 +227,124 @@ export default function BookingsAdmin() {
           </table>
         </div>
       )}
+
+      {cancelTarget && (
+        <CancelBookingModal
+          booking={cancelTarget}
+          onClose={() => setCancelTarget(null)}
+          onSuccess={() => { setCancelTarget(null); load(); }}
+        />
+      )}
+    </div>
+  );
+}
+
+/** Modal hủy booking — CHỈ dành cho Admin/Staff với toggle Refund/No Refund */
+function CancelBookingModal({ booking, onClose, onSuccess }: any) {
+  const [reason, setReason] = useState("");
+  const [refund, setRefund] = useState<boolean | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState("");
+
+  const hoursUntil = (new Date(`${booking.ngay_dat}T${booking.gio_bat_dau}`).getTime() - Date.now()) / 3600000;
+  const policyDefault = hoursUntil >= 24;
+
+  async function submit() {
+    if (reason.length < 3) {
+      setErr("Vui lòng nhập lý do (≥3 ký tự)");
+      return;
+    }
+    setLoading(true);
+    try {
+      const body: any = { ly_do_huy: reason };
+      // Chỉ gửi hoan_tien nếu admin chọn override (khác null)
+      if (refund !== null) body.hoan_tien = refund;
+      await apiPost(`/api/bookings/${booking.id}/cancel`, body);
+      onSuccess();
+    } catch (e: any) {
+      setErr(e.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 bg-ink-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl">
+        <div className="flex items-center justify-between p-5 border-b border-neutral-100">
+          <h3 className="text-2xl font-bold">Hủy booking</h3>
+          <button onClick={onClose} className="p-1.5 hover:bg-neutral-100 rounded-lg"><X size={18} /></button>
+        </div>
+
+        <div className="p-5 space-y-4">
+          <div className="text-sm text-ink-400">
+            <div><strong className="text-ink-900">{booking.ma_dat_san}</strong> · {booking.ten_san}</div>
+            <div className="text-xs mt-0.5">
+              {booking.ten_khach} · {booking.sdt_khach}
+            </div>
+            <div className="text-xs">
+              Còn <strong>{hoursUntil.toFixed(1)}h</strong> trước giờ chơi
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-semibold mb-1.5">Lý do hủy *</label>
+            <textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={3}
+              className="w-full px-3 py-2.5 rounded-xl border border-neutral-200 focus:border-red-700 outline-none resize-none text-sm"
+              placeholder="Ví dụ: Khách yêu cầu hủy, lịch trùng, sân bảo trì..." />
+          </div>
+
+          {/* Refund Toggle — chỉ admin/staff thấy */}
+          <div className="p-3 rounded-xl bg-amber-50 border border-amber-200">
+            <div className="text-xs font-bold text-amber-900 mb-2">⚖️ HOÀN TIỀN (chỉ dành cho Admin/Staff)</div>
+            <div className="text-xs text-amber-800 mb-3">
+              Mặc định theo policy 24h: <strong>{policyDefault ? "Hoàn 50%" : "Không hoàn"}</strong>. Có thể override:
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              <button onClick={() => setRefund(null)}
+                className={`px-2 py-2 rounded-lg text-xs font-semibold border-2 transition ${
+                  refund === null
+                    ? "bg-amber-700 text-white border-amber-700"
+                    : "bg-white border-neutral-200 hover:border-amber-400"
+                }`}>
+                Auto (24h)
+              </button>
+              <button onClick={() => setRefund(true)}
+                className={`px-2 py-2 rounded-lg text-xs font-semibold border-2 transition ${
+                  refund === true
+                    ? "bg-blue-700 text-white border-blue-700"
+                    : "bg-white border-neutral-200 hover:border-blue-400"
+                }`}>
+                <RotateCcw size={11} className="inline mr-1" />
+                Hoàn tiền
+              </button>
+              <button onClick={() => setRefund(false)}
+                className={`px-2 py-2 rounded-lg text-xs font-semibold border-2 transition ${
+                  refund === false
+                    ? "bg-neutral-700 text-white border-neutral-700"
+                    : "bg-white border-neutral-200 hover:border-neutral-400"
+                }`}>
+                <Ban size={11} className="inline mr-1" />
+                Không hoàn
+              </button>
+            </div>
+          </div>
+
+          {err && (
+            <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm">{err}</div>
+          )}
+
+          <div className="flex gap-2">
+            <button onClick={onClose} className="flex-1 py-2.5 rounded-xl border border-neutral-200 font-semibold text-sm">
+              Quay lại
+            </button>
+            <button onClick={submit} disabled={loading}
+              className="flex-1 py-2.5 rounded-xl bg-red-700 hover:bg-red-800 text-white font-semibold disabled:opacity-50 text-sm">
+              {loading ? "Đang hủy..." : "Xác nhận hủy"}
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
