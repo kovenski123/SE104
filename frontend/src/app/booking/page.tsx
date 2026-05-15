@@ -1,21 +1,27 @@
 "use client";
+
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { motion, AnimatePresence } from "framer-motion";
 import Navbar from "@/components/Navbar";
 import { apiGet, apiPost, formatVND } from "@/lib/api";
-import { AlertCircle, CheckCircle2, MapPin, Phone, User as UserIcon, Mail, Wifi, Car, Coffee, Loader2 } from "lucide-react";
+import { 
+  AlertCircle, CheckCircle2, MapPin, Phone, User, Mail, 
+  Wifi, Car, Coffee, Loader2, Clock, Users, Zap, ChevronRight,
+  Star, Calendar
+} from "lucide-react";
 
 // Giờ bắt đầu: mỗi 30 phút từ 6:00 đến 22:00
 const START_TIMES: string[] = [];
 for (let h = 6; h <= 22; h++) {
   for (const m of [0, 30]) {
-    if (h === 22 && m === 30) continue; // Bỏ slot 22:30 (chơi tối thiểu 30p thì kết thúc 23:00 quá giờ)
+    if (h === 22 && m === 30) continue;
     START_TIMES.push(`${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`);
   }
 }
 
-// Duration options: 0.5h tới 3h, bước 30 phút
 const DURATIONS = [0.5, 1, 1.5, 2, 2.5, 3];
+const DAY_LABELS = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"];
 
 function addDuration(start: string, hours: number): string {
   const [h, m] = start.split(":").map(Number);
@@ -24,8 +30,6 @@ function addDuration(start: string, hours: number): string {
   const em = totalMin % 60;
   return `${String(eh).padStart(2, "0")}:${String(em).padStart(2, "0")}`;
 }
-
-const DAY_LABELS = ["Chủ nhật", "Thứ 2", "Thứ 3", "Thứ 4", "Thứ 5", "Thứ 6", "Thứ 7"];
 
 type Field = {
   id: number;
@@ -51,10 +55,10 @@ export default function BookingPage() {
   const [fields, setFields] = useState<Field[]>([]);
   const [services, setServices] = useState<Service[]>([]);
   const [activeField, setActiveField] = useState<Field | null>(null);
-  const [dateOffset, setDateOffset] = useState(0); // 0..6 từ hôm nay
+  const [dateOffset, setDateOffset] = useState(0);
   const [bookedRanges, setBookedRanges] = useState<{ s: number; e: number }[]>([]);
   const [startTime, setStartTime] = useState<string | null>(null);
-  const [duration, setDuration] = useState<number>(1); // mặc định 1 tiếng
+  const [duration, setDuration] = useState<number>(1);
   const [chosenSvc, setChosenSvc] = useState<Record<number, number>>({});
   const [tenKhach, setTenKhach] = useState("");
   const [sdtKhach, setSdtKhach] = useState("");
@@ -63,7 +67,6 @@ export default function BookingPage() {
   const [err, setErr] = useState("");
   const [loadErr, setLoadErr] = useState("");
 
-  // Date hiện tại
   const targetDate = useMemo(() => {
     const d = new Date();
     d.setDate(d.getDate() + dateOffset);
@@ -71,7 +74,6 @@ export default function BookingPage() {
   }, [dateOffset]);
   const dateStr = targetDate.toISOString().slice(0, 10);
 
-  // Load fields + services
   useEffect(() => {
     Promise.all([
       apiGet("/api/fields?trang_thai=HOAT_DONG"),
@@ -80,22 +82,18 @@ export default function BookingPage() {
       .then(([f, s]) => {
         setFields(f);
         setServices(s);
-        if (f.length > 0) {
-          setActiveField(f[0]);
-        } else {
-          setLoadErr("Hệ thống chưa có dữ liệu sân. Vui lòng chạy `python seed.py` ở backend.");
-        }
+        if (f.length > 0) setActiveField(f[0]);
+        else setLoadErr("Hệ thống chưa có dữ liệu sân.");
       })
       .catch((e: any) => {
         setLoadErr(
-          e.message?.includes("Failed to fetch") || e.message?.includes("NetworkError")
-            ? "Không kết nối được tới backend (cổng 8000). Kiểm tra `uvicorn` đã chạy chưa."
-            : `Lỗi tải dữ liệu: ${e.message}`
+          e.message?.includes("Failed to fetch")
+            ? "Không kết nối được tới backend."
+            : `Lỗi: ${e.message}`
         );
       });
   }, []);
 
-  // Load schedule khi field/date đổi
   useEffect(() => {
     if (!activeField) return;
     setStartTime(null);
@@ -119,12 +117,11 @@ export default function BookingPage() {
     return bookedRanges.some((b) => s < b.e && e > b.s);
   }
 
-  /** Kiểm tra một slot start có khả dụng (đủ chỗ cho duration đã chọn, không quá 23:00) */
   function isStartAvailable(start: string, dur: number): boolean {
     const end = addDuration(start, dur);
-    const [eh, em] = end.split(":").map(Number);
-    const endMin = eh * 60 + em;
-    if (endMin > 23 * 60) return false; // Sân đóng cửa 23:00
+    const [eh] = end.split(":").map(Number);
+    const endMin = eh * 60 + parseInt(end.split(":")[1]);
+    if (endMin > 23 * 60) return false;
     return !isSlotBooked(start, end);
   }
 
@@ -137,7 +134,6 @@ export default function BookingPage() {
     });
   }
 
-  // Tính tiền
   const endTime = useMemo(() => startTime ? addDuration(startTime, duration) : null, [startTime, duration]);
 
   const tienSan = useMemo(() => {
@@ -206,20 +202,14 @@ export default function BookingPage() {
       <>
         <Navbar />
         <div className="max-w-2xl mx-auto p-6 mt-8">
-          <div className="bg-red-50 border border-red-300 rounded-lg p-5">
-            <div className="flex items-start gap-3">
-              <AlertCircle className="text-red-600 shrink-0 mt-0.5" />
+          <div className="bg-destructive/10 border border-destructive/20 rounded-2xl p-6">
+            <div className="flex items-start gap-4">
+              <AlertCircle className="text-destructive shrink-0 mt-0.5" />
               <div>
-                <h3 className="font-bold text-red-700 mb-1">Không tải được dữ liệu</h3>
-                <p className="text-sm text-red-700 mb-3">{loadErr}</p>
-                <div className="bg-white border border-red-200 rounded p-3 text-xs text-ink-700 font-mono whitespace-pre">
-{`# Mở terminal mới ở folder backend rồi chạy:
-cd backend
-python seed.py
-uvicorn app.main:app --reload`}
-                </div>
+                <h3 className="font-bold text-destructive mb-2">Không tải được dữ liệu</h3>
+                <p className="text-sm text-destructive/80 mb-4">{loadErr}</p>
                 <button onClick={() => window.location.reload()}
-                  className="mt-3 px-4 py-2 bg-red-700 text-white rounded text-sm font-semibold hover:bg-red-800">
+                  className="px-4 py-2 bg-destructive text-white rounded-xl text-sm font-semibold">
                   Tải lại trang
                 </button>
               </div>
@@ -234,355 +224,444 @@ uvicorn app.main:app --reload`}
     return (
       <>
         <Navbar />
-        <div className="p-16 text-center text-ink-400">
-          <Loader2 className="animate-spin mx-auto mb-2" /> Đang tải...
+        <div className="p-16 text-center text-muted-foreground">
+          <Loader2 className="animate-spin mx-auto mb-2 w-8 h-8" />
+          <p>Đang tải...</p>
         </div>
       </>
     );
   }
 
-  const minGia = Math.min(...fields.map((f) => f.gia_tieu_chuan));
-  const maxGia = Math.max(...fields.map((f) => f.gia_cao_diem));
-
   return (
     <>
       <Navbar />
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-
-        {/* Breadcrumb */}
-        <div className="text-xs text-ink-400 mb-3">
-          Trang chủ / Sân bóng đá / Hồ Chí Minh
-        </div>
-
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         {/* Header */}
-        <div className="flex items-start gap-2 mb-1 flex-wrap">
-          <h1 className="text-2xl md:text-3xl font-bold text-ink-900">Sân bóng đá UIT</h1>
-          <CheckCircle2 size={20} className="text-blue-500 mt-1.5" />
-        </div>
-        <div className="flex items-center gap-1 text-sm text-ink-400 mb-1">
-          <MapPin size={14} /> Khu phố 6, P. Linh Trung, TP. Thủ Đức, TPHCM
-        </div>
-        <div className="text-sm text-ink-400 mb-5">
-          Đánh giá: <span className="text-amber-500">★ 4.5/5</span>
-        </div>
-
-        {/* Preview + Info */}
-        <div className="grid md:grid-cols-3 gap-5 mb-6">
-          {/* Preview (CSS pitch) */}
-          <div className="md:col-span-2">
-            <PitchPreview field={activeField} allFields={fields} />
-            {/* Thumbnails */}
-            <div className="grid grid-cols-6 gap-2 mt-2">
-              {fields.slice(0, 6).map((f) => (
-                <button key={f.id} onClick={() => setActiveField(f)}
-                  className={`aspect-[4/3] rounded border-2 overflow-hidden transition ${
-                    activeField.id === f.id ? "border-red-700" : "border-neutral-200 hover:border-neutral-400"
-                  }`}>
-                  <PitchMini field={f} allFields={fields} />
-                </button>
-              ))}
-            </div>
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mb-8"
+        >
+          <div className="flex items-center gap-2 text-sm text-muted-foreground mb-4">
+            <span>Trang chủ</span>
+            <ChevronRight className="w-4 h-4" />
+            <span>Sân bóng đá</span>
+            <ChevronRight className="w-4 h-4" />
+            <span className="text-foreground font-medium">Đặt sân</span>
           </div>
 
-          {/* Info panel */}
-          <div className="bg-neutral-50 rounded-lg p-4 border border-neutral-200 h-fit">
-            <h3 className="font-bold text-lg mb-3 text-ink-900">Thông tin sân</h3>
-            <div className="space-y-2 text-sm">
-              <InfoRow label="Giờ mở cửa" value="6:00 - 22:30" />
-              <InfoRow label="Số sân" value={`${fields.length} sân`} />
-              <InfoRow label="Giá sân" value={`${formatVND(minGia)} - ${formatVND(maxGia)}/h`} />
-              <InfoRow label="Slot đặt" value="1.5 giờ" />
-            </div>
-
-            <div className="mt-4 pt-4 border-t border-neutral-200">
-              <div className="text-xs font-bold text-ink-400 mb-2">DỊCH VỤ TIỆN ÍCH</div>
-              <div className="flex flex-wrap gap-2 text-xs">
-                <Chip icon={<Wifi size={12} />}>Wifi</Chip>
-                <Chip icon={<Car size={12} />}>Bãi đỗ xe</Chip>
-                <Chip icon={<Coffee size={12} />}>Căng tin</Chip>
-                <Chip>Đồ ăn</Chip>
-                <Chip>Nước uống</Chip>
+          <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-3 mb-2">
+                <h1 className="text-3xl md:text-4xl font-display font-bold text-foreground">
+                  Đặt Sân Bóng
+                </h1>
+                <div className="flex items-center gap-1 px-3 py-1 bg-primary/10 text-primary rounded-full text-sm font-medium">
+                  <Zap className="w-4 h-4" />
+                  <span>Real-time</span>
+                </div>
+              </div>
+              <div className="flex items-center gap-4 text-muted-foreground">
+                <span className="flex items-center gap-1">
+                  <MapPin className="w-4 h-4" />
+                  TP. Hồ Chí Minh
+                </span>
+                <span className="flex items-center gap-1">
+                  <Star className="w-4 h-4 text-accent fill-accent" />
+                  4.8/5
+                </span>
               </div>
             </div>
           </div>
-        </div>
+        </motion.div>
 
-        {/* Field selector cards */}
-        <div className="mb-6">
-          <h2 className="text-xl font-bold mb-3 text-ink-900">Chọn sân</h2>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
-            {fields.map((f) => (
-              <button key={f.id} onClick={() => setActiveField(f)}
-                className={`p-3 rounded-lg border-2 text-left transition ${
-                  activeField.id === f.id
-                    ? "border-red-700 bg-red-50"
-                    : "border-neutral-200 hover:border-neutral-400 bg-white"
-                }`}>
-                <div className="flex items-center gap-1.5 mb-1">
-                  <span className="text-lg">⚽</span>
-                  <span className="font-bold text-sm">{f.ten_san.split(" - ")[0]}</span>
-                </div>
-                <div className="text-xs text-ink-400">
-                  {f.loai_san === "SAN_5" ? "Sân 5 người" : f.loai_san === "SAN_7" ? "Sân 7 người" : "Sân 11 người"}
-                </div>
-                <div className="text-xs text-red-700 font-semibold mt-1">{formatVND(f.gia_tieu_chuan)}/h</div>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Booking section */}
-        <div className="bg-white rounded-lg border border-neutral-200 p-5 mb-6">
-          <h2 className="text-xl font-bold mb-1 text-ink-900">Đặt sân</h2>
-          <p className="text-sm text-ink-400 mb-4">
-            Đang đặt: <span className="font-semibold text-ink-900">{activeField.ten_san}</span>
-          </p>
-
-          {/* Legend */}
-          <div className="flex flex-wrap gap-3 mb-4 text-xs">
-            <LegendDot color="bg-white border-neutral-400" text="Giờ trống" />
-            <LegendDot color="bg-red-100 border-red-400" text="Đã đặt" />
-            <LegendDot color="bg-red-700 border-red-700" text="Đang chọn" />
-            <LegendDot color="bg-amber-50 border-amber-400" text="Cao điểm" />
-          </div>
-
-          {/* Day tabs */}
-          <div className="border-b border-neutral-200 mb-4 -mx-1 px-1 overflow-x-auto">
-            <div className="flex gap-1 min-w-max">
-              {Array.from({ length: 7 }, (_, i) => {
-                const d = new Date();
-                d.setDate(d.getDate() + i);
-                const isToday = i === 0;
-                const dayLabel = isToday ? "Hôm nay" : DAY_LABELS[d.getDay()];
-                return (
-                  <button key={i} onClick={() => setDateOffset(i)}
-                    data-active={dateOffset === i}
-                    className={`day-tab px-4 py-2.5 text-sm font-medium border-b-3 transition ${
-                      dateOffset === i ? "text-ink-900" : "text-ink-400 hover:text-ink-900"
-                    }`}>
-                    <div>{dayLabel}</div>
-                    <div className="text-[11px] text-ink-400">{d.getDate()}/{d.getMonth() + 1}</div>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Duration picker */}
-          <div className="mb-4">
-            <h3 className="text-sm font-bold text-ink-900 mb-2">1. Chọn thời lượng chơi</h3>
-            <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
-              {DURATIONS.map((d) => (
-                <button key={d} onClick={() => setDuration(d)}
-                  className={`px-3 py-2.5 rounded border-2 text-sm font-semibold transition ${
-                    duration === d
-                      ? "bg-red-700 text-white border-red-700"
-                      : "bg-white border-neutral-300 hover:border-red-400"
-                  }`}>
-                  {d === 0.5 ? "30 phút" : `${d} giờ`}
-                </button>
-              ))}
-            </div>
-            <p className="text-xs text-ink-400 mt-1.5">Slot 30 phút — chọn từ 30 phút tới 3 giờ.</p>
-          </div>
-
-          {/* Start time grid */}
-          <h3 className="text-sm font-bold text-ink-900 mb-2">2. Chọn giờ bắt đầu</h3>
-          <div className="grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-7 gap-2 mb-5">
-            {START_TIMES.map((t) => {
-              const end = addDuration(t, duration);
-              const available = isStartAvailable(t, duration);
-              const isPeak = parseInt(t.split(":")[0]) >= 17;
-              const isSelected = startTime === t;
-              return (
-                <button key={t} disabled={!available}
-                  onClick={() => setStartTime(t)}
-                  className={`slot ${!available ? "disabled" : ""} px-2 py-2 rounded border-2 text-xs sm:text-sm font-medium ${
-                    isSelected
-                      ? "bg-red-700 text-white border-red-700"
-                      : !available
-                      ? "bg-red-100 text-red-700 border-red-300"
-                      : isPeak
-                      ? "bg-amber-50 border-amber-400 text-amber-800 hover:bg-amber-100"
-                      : "bg-white border-neutral-300 hover:border-neutral-500"
-                  }`}
-                  title={available ? `${t} - ${end}` : "Không khả dụng"}>
-                  <div className="font-bold">{t}</div>
-                  <div className="text-[10px] opacity-75">→ {end}</div>
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Add-ons */}
-          <div className="mb-5">
-            <h3 className="font-bold text-base mb-3 text-ink-900">Dịch vụ đi kèm</h3>
-            <div className="grid sm:grid-cols-2 gap-2">
-              {services.slice(0, 8).map((svc) => {
-                const qty = chosenSvc[svc.id] || 0;
-                return (
-                  <label key={svc.id}
-                    className={`flex items-center gap-3 p-3 rounded border-2 cursor-pointer transition ${
-                      qty > 0 ? "border-red-700 bg-red-50" : "border-neutral-200 hover:border-neutral-400"
-                    }`}>
-                    <input type="checkbox" checked={qty > 0}
-                      onChange={(e) => setQty(svc.id, e.target.checked ? 1 : 0)}
-                      className="w-4 h-4 accent-red-700" />
-                    <div className="flex-1">
-                      <div className="text-sm font-medium">{svc.ten_dich_vu}</div>
-                      <div className="text-xs text-ink-400">{formatVND(svc.don_gia)}/{svc.don_vi_tinh}</div>
+        <div className="grid lg:grid-cols-3 gap-6">
+          {/* Main Content */}
+          <div className="lg:col-span-2 space-y-6">
+            {/* Field Selection */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.1 }}
+              className="bg-card rounded-3xl border border-border p-6"
+            >
+              <h2 className="text-xl font-display font-bold text-foreground mb-4 flex items-center gap-2">
+                <span className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center text-sm font-bold">1</span>
+                Chọn sân
+              </h2>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                {fields.map((f) => (
+                  <button
+                    key={f.id}
+                    onClick={() => setActiveField(f)}
+                    className={`p-4 rounded-2xl border-2 text-left transition-all duration-200 slot-card ${
+                      activeField.id === f.id
+                        ? "border-primary bg-primary/5 shadow-lg shadow-primary/10"
+                        : "border-border hover:border-primary/30 bg-card"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-2xl">⚽</span>
+                      <span className="font-bold text-foreground">{f.ten_san.split(" - ")[0]}</span>
                     </div>
-                    {qty > 0 && (
-                      <div className="flex items-center gap-1" onClick={(e) => e.preventDefault()}>
-                        <button type="button" onClick={(e) => { e.preventDefault(); setQty(svc.id, qty - 1); }}
-                          className="w-7 h-7 rounded bg-white border border-neutral-300 hover:bg-neutral-100">−</button>
-                        <span className="w-7 text-center text-sm font-bold">{qty}</span>
-                        <button type="button" onClick={(e) => { e.preventDefault(); setQty(svc.id, Math.min(qty + 1, svc.ton_kho)); }}
-                          className="w-7 h-7 rounded bg-white border border-neutral-300 hover:bg-neutral-100">+</button>
+                    <div className="text-xs text-muted-foreground mb-1">
+                      {f.loai_san === "SAN_5" ? "5 vs 5" : f.loai_san === "SAN_7" ? "7 vs 7" : "11 vs 11"}
+                    </div>
+                    <div className="text-sm font-semibold text-primary">
+                      {formatVND(f.gia_tieu_chuan)}/h
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </motion.div>
+
+            {/* Date & Duration */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2 }}
+              className="bg-card rounded-3xl border border-border p-6"
+            >
+              <h2 className="text-xl font-display font-bold text-foreground mb-4 flex items-center gap-2">
+                <span className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center text-sm font-bold">2</span>
+                Chọn ngày & thời lượng
+              </h2>
+
+              {/* Day Tabs */}
+              <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
+                {Array.from({ length: 7 }, (_, i) => {
+                  const d = new Date();
+                  d.setDate(d.getDate() + i);
+                  const isToday = i === 0;
+                  return (
+                    <button
+                      key={i}
+                      onClick={() => setDateOffset(i)}
+                      className={`flex-shrink-0 px-4 py-3 rounded-2xl text-center transition-all ${
+                        dateOffset === i
+                          ? "bg-primary text-primary-foreground shadow-lg shadow-primary/25"
+                          : "bg-secondary hover:bg-secondary/80 text-foreground"
+                      }`}
+                    >
+                      <div className="text-xs font-medium opacity-80">
+                        {isToday ? "Hôm nay" : DAY_LABELS[d.getDay()]}
                       </div>
-                    )}
+                      <div className="text-lg font-bold">{d.getDate()}</div>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Duration */}
+              <div className="mb-4">
+                <label className="text-sm font-semibold text-foreground mb-3 block">
+                  Thời lượng chơi
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {DURATIONS.map((d) => (
+                    <button
+                      key={d}
+                      onClick={() => setDuration(d)}
+                      className={`px-4 py-2.5 rounded-xl text-sm font-semibold transition-all ${
+                        duration === d
+                          ? "bg-primary text-primary-foreground shadow-lg shadow-primary/25"
+                          : "bg-secondary hover:bg-secondary/80 text-foreground"
+                      }`}
+                    >
+                      {d === 0.5 ? "30 phút" : `${d} giờ`}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </motion.div>
+
+            {/* Time Slots */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.3 }}
+              className="bg-card rounded-3xl border border-border p-6"
+            >
+              <h2 className="text-xl font-display font-bold text-foreground mb-4 flex items-center gap-2">
+                <span className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center text-sm font-bold">3</span>
+                Chọn giờ bắt đầu
+              </h2>
+
+              {/* Legend */}
+              <div className="flex flex-wrap gap-4 mb-4 text-xs">
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-4 rounded bg-card border border-border" />
+                  <span className="text-muted-foreground">Trống</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-4 rounded bg-destructive/20 border border-destructive/30" />
+                  <span className="text-muted-foreground">Đã đặt</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-4 rounded bg-primary" />
+                  <span className="text-muted-foreground">Đang chọn</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-4 rounded bg-accent/20 border border-accent/30" />
+                  <span className="text-muted-foreground">Cao điểm (17h+)</span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-6 gap-2">
+                {START_TIMES.map((t) => {
+                  const end = addDuration(t, duration);
+                  const available = isStartAvailable(t, duration);
+                  const isPeak = parseInt(t.split(":")[0]) >= 17;
+                  const isSelected = startTime === t;
+                  return (
+                    <button
+                      key={t}
+                      disabled={!available}
+                      onClick={() => setStartTime(t)}
+                      className={`slot-card p-3 rounded-xl text-center border-2 transition-all ${
+                        isSelected
+                          ? "bg-primary text-primary-foreground border-primary shadow-lg shadow-primary/25"
+                          : !available
+                          ? "bg-destructive/10 text-destructive/50 border-destructive/20 cursor-not-allowed"
+                          : isPeak
+                          ? "bg-accent/10 border-accent/30 text-foreground hover:border-accent"
+                          : "bg-card border-border text-foreground hover:border-primary/30"
+                      }`}
+                    >
+                      <div className="font-bold text-sm">{t}</div>
+                      <div className="text-[10px] opacity-70">→ {end}</div>
+                    </button>
+                  );
+                })}
+              </div>
+            </motion.div>
+
+            {/* Services */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.4 }}
+              className="bg-card rounded-3xl border border-border p-6"
+            >
+              <h2 className="text-xl font-display font-bold text-foreground mb-4 flex items-center gap-2">
+                <span className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center text-sm font-bold">4</span>
+                Dịch vụ đi kèm
+              </h2>
+              <div className="grid sm:grid-cols-2 gap-3">
+                {services.slice(0, 8).map((svc) => {
+                  const qty = chosenSvc[svc.id] || 0;
+                  return (
+                    <label
+                      key={svc.id}
+                      className={`flex items-center gap-4 p-4 rounded-2xl border-2 cursor-pointer transition-all ${
+                        qty > 0 
+                          ? "border-primary bg-primary/5" 
+                          : "border-border hover:border-primary/30"
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={qty > 0}
+                        onChange={(e) => setQty(svc.id, e.target.checked ? 1 : 0)}
+                        className="w-5 h-5 rounded-lg accent-primary"
+                      />
+                      <div className="flex-1">
+                        <div className="font-medium text-foreground">{svc.ten_dich_vu}</div>
+                        <div className="text-sm text-muted-foreground">
+                          {formatVND(svc.don_gia)}/{svc.don_vi_tinh}
+                        </div>
+                      </div>
+                      {qty > 0 && (
+                        <div className="flex items-center gap-2" onClick={(e) => e.preventDefault()}>
+                          <button
+                            onClick={() => setQty(svc.id, qty - 1)}
+                            className="w-8 h-8 rounded-lg bg-secondary hover:bg-secondary/80 font-bold"
+                          >
+                            −
+                          </button>
+                          <span className="w-8 text-center font-bold">{qty}</span>
+                          <button
+                            onClick={() => setQty(svc.id, Math.min(qty + 1, svc.ton_kho))}
+                            className="w-8 h-8 rounded-lg bg-secondary hover:bg-secondary/80 font-bold"
+                          >
+                            +
+                          </button>
+                        </div>
+                      )}
+                    </label>
+                  );
+                })}
+              </div>
+            </motion.div>
+
+            {/* Contact Form */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.5 }}
+              className="bg-card rounded-3xl border border-border p-6"
+            >
+              <h2 className="text-xl font-display font-bold text-foreground mb-4 flex items-center gap-2">
+                <span className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center text-sm font-bold">5</span>
+                Thông tin liên hệ
+              </h2>
+              <div className="grid sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm font-semibold text-foreground mb-2 flex items-center gap-2">
+                    <User className="w-4 h-4" /> Họ tên <span className="text-destructive">*</span>
                   </label>
-                );
-              })}
-            </div>
+                  <input
+                    value={tenKhach}
+                    onChange={(e) => setTenKhach(e.target.value)}
+                    placeholder="Nguyễn Văn A"
+                    className="w-full px-4 py-3 rounded-xl border border-input bg-background focus:border-primary focus:ring-4 focus:ring-primary/10 outline-none transition-all"
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-semibold text-foreground mb-2 flex items-center gap-2">
+                    <Phone className="w-4 h-4" /> Số điện thoại <span className="text-destructive">*</span>
+                  </label>
+                  <input
+                    value={sdtKhach}
+                    onChange={(e) => setSdtKhach(e.target.value)}
+                    placeholder="0901234567"
+                    maxLength={10}
+                    className="w-full px-4 py-3 rounded-xl border border-input bg-background focus:border-primary focus:ring-4 focus:ring-primary/10 outline-none transition-all"
+                  />
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="text-sm font-semibold text-foreground mb-2 flex items-center gap-2">
+                    <Mail className="w-4 h-4" /> Email <span className="text-muted-foreground font-normal">(tùy chọn)</span>
+                  </label>
+                  <input
+                    value={emailKhach}
+                    onChange={(e) => setEmailKhach(e.target.value)}
+                    placeholder="ban@email.com"
+                    type="email"
+                    className="w-full px-4 py-3 rounded-xl border border-input bg-background focus:border-primary focus:ring-4 focus:ring-primary/10 outline-none transition-all"
+                  />
+                </div>
+              </div>
+            </motion.div>
           </div>
 
-          {/* Contact form */}
-          <div className="mb-5">
-            <h3 className="font-bold text-base mb-3 text-ink-900">Thông tin liên hệ</h3>
-            <div className="grid sm:grid-cols-2 gap-3">
-              <div>
-                <label className="text-sm font-medium text-ink-700 mb-1.5 flex items-center gap-1.5">
-                  <UserIcon size={14} /> Họ tên *
-                </label>
-                <input value={tenKhach} onChange={(e) => setTenKhach(e.target.value)}
-                  placeholder="Nguyễn Văn A"
-                  className="w-full px-3 py-2.5 rounded border border-neutral-300 focus:border-red-700 focus:ring-2 focus:ring-red-100 outline-none transition" />
+          {/* Sidebar - Summary */}
+          <div className="lg:col-span-1">
+            <motion.div
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.3 }}
+              className="sticky top-24 bg-card rounded-3xl border border-border p-6"
+            >
+              <h3 className="text-lg font-display font-bold text-foreground mb-4">
+                Tóm tắt đặt sân
+              </h3>
+
+              {/* Field Info */}
+              <div className="p-4 rounded-2xl bg-secondary/50 mb-4">
+                <div className="flex items-center gap-3 mb-2">
+                  <span className="text-3xl">⚽</span>
+                  <div>
+                    <div className="font-bold text-foreground">{activeField.ten_san}</div>
+                    <div className="text-sm text-muted-foreground">
+                      {activeField.loai_san === "SAN_5" ? "Sân 5 người" : activeField.loai_san === "SAN_7" ? "Sân 7 người" : "Sân 11 người"}
+                    </div>
+                  </div>
+                </div>
               </div>
-              <div>
-                <label className="text-sm font-medium text-ink-700 mb-1.5 flex items-center gap-1.5">
-                  <Phone size={14} /> Số điện thoại *
-                </label>
-                <input value={sdtKhach} onChange={(e) => setSdtKhach(e.target.value)}
-                  placeholder="0901234567" maxLength={10}
-                  className="w-full px-3 py-2.5 rounded border border-neutral-300 focus:border-red-700 focus:ring-2 focus:ring-red-100 outline-none transition" />
+
+              {/* Booking Details */}
+              <div className="space-y-3 mb-6">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground flex items-center gap-2">
+                    <Calendar className="w-4 h-4" /> Ngày
+                  </span>
+                  <span className="font-medium text-foreground">
+                    {targetDate.toLocaleDateString("vi-VN")}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground flex items-center gap-2">
+                    <Clock className="w-4 h-4" /> Thời gian
+                  </span>
+                  <span className="font-medium text-foreground">
+                    {startTime ? `${startTime} - ${endTime}` : "Chưa chọn"}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground flex items-center gap-2">
+                    <Users className="w-4 h-4" /> Thời lượng
+                  </span>
+                  <span className="font-medium text-foreground">
+                    {duration === 0.5 ? "30 phút" : `${duration} giờ`}
+                  </span>
+                </div>
               </div>
-              <div className="sm:col-span-2">
-                <label className="text-sm font-medium text-ink-700 mb-1.5 flex items-center gap-1.5">
-                  <Mail size={14} /> Email <span className="text-ink-400 font-normal">(tuỳ chọn — để nhận nhắc lịch 30 phút trước giờ chơi)</span>
-                </label>
-                <input value={emailKhach} onChange={(e) => setEmailKhach(e.target.value)}
-                  placeholder="ban@email.com" type="email"
-                  className="w-full px-3 py-2.5 rounded border border-neutral-300 focus:border-red-700 focus:ring-2 focus:ring-red-100 outline-none transition" />
+
+              {/* Pricing */}
+              <div className="border-t border-border pt-4 space-y-2">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">Tiền sân</span>
+                  <span className="font-medium text-foreground">{formatVND(tienSan)}</span>
+                </div>
+                {tienDV > 0 && (
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">Dịch vụ</span>
+                    <span className="font-medium text-foreground">{formatVND(tienDV)}</span>
+                  </div>
+                )}
+                <div className="flex items-center justify-between pt-2 border-t border-border">
+                  <span className="font-bold text-foreground">Tổng cộng</span>
+                  <span className="text-2xl font-display font-bold text-primary">
+                    {formatVND(tongCong)}
+                  </span>
+                </div>
               </div>
-            </div>
+
+              {/* Error */}
+              <AnimatePresence>
+                {err && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    className="mt-4 p-3 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive text-sm"
+                  >
+                    {err}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              {/* Submit Button */}
+              <button
+                onClick={submit}
+                disabled={submitting || !startTime}
+                className="w-full mt-6 py-4 bg-primary hover:bg-primary/90 text-primary-foreground rounded-2xl font-semibold shadow-lg shadow-primary/25 hover:shadow-primary/40 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
+              >
+                {submitting ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    <span>Đang xử lý...</span>
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 className="w-5 h-5" />
+                    <span>Đặt sân ngay</span>
+                  </>
+                )}
+              </button>
+
+              {/* Info */}
+              <div className="mt-4 flex items-center gap-3 p-3 rounded-xl bg-accent/10 border border-accent/20">
+                <Wifi className="w-5 h-5 text-accent shrink-0" />
+                <p className="text-xs text-muted-foreground">
+                  Wifi miễn phí, bãi đỗ xe, căng tin
+                </p>
+              </div>
+            </motion.div>
           </div>
-
-          {/* Summary */}
-          <div className="bg-neutral-50 rounded-lg p-4 mb-4 border border-neutral-200">
-            <div className="text-sm space-y-1.5 mb-3">
-              <SumRow label="Sân" value={activeField.ten_san} />
-              <SumRow label="Ngày" value={`${targetDate.getDate()}/${targetDate.getMonth() + 1}/${targetDate.getFullYear()}`} />
-              <SumRow label="Khung giờ" value={startTime && endTime ? `${startTime} - ${endTime} (${duration === 0.5 ? "30 phút" : duration + " giờ"})` : "—"} />
-              <SumRow label="Tiền sân" value={formatVND(tienSan)} />
-              <SumRow label="Tiền dịch vụ" value={formatVND(tienDV)} />
-            </div>
-            <div className="flex justify-between items-center pt-3 border-t border-neutral-300">
-              <span className="font-bold">Tổng cộng</span>
-              <span className="text-2xl font-bold text-red-700">{formatVND(tongCong)}</span>
-            </div>
-          </div>
-
-          {err && (
-            <div className="mb-3 p-3 rounded bg-red-50 border border-red-200 text-red-700 text-sm">{err}</div>
-          )}
-
-          <button onClick={submit} disabled={submitting || !startTime}
-            className="w-full py-3.5 bg-red-700 hover:bg-red-800 text-white rounded font-bold text-base disabled:opacity-50 disabled:cursor-not-allowed transition">
-            {submitting ? "Đang xử lý..." : "Đặt sân →"}
-          </button>
         </div>
       </div>
     </>
-  );
-}
-
-function InfoRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex justify-between">
-      <span className="text-ink-400">{label}:</span>
-      <span className="font-semibold text-ink-900">{value}</span>
-    </div>
-  );
-}
-
-function Chip({ icon, children }: { icon?: React.ReactNode; children: React.ReactNode }) {
-  return (
-    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-white border border-neutral-300">
-      {icon}{children}
-    </span>
-  );
-}
-
-function LegendDot({ color, text }: { color: string; text: string }) {
-  return (
-    <div className="flex items-center gap-1.5">
-      <div className={`w-4 h-4 rounded border-2 ${color}`} />
-      <span className="text-ink-700">{text}</span>
-    </div>
-  );
-}
-
-function SumRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex justify-between">
-      <span className="text-ink-400">{label}:</span>
-      <span className="text-ink-900">{value}</span>
-    </div>
-  );
-}
-
-function PitchPreview({ field, allFields }: { field: Field; allFields: Field[] }) {
-  const idx = allFields.findIndex((f) => f.id === field.id);
-  const imgIdx = (idx >= 0 ? idx : 0) % 6 + 1;
-  const imgSrc = `/fields/img-${imgIdx}.jpg`;
-
-  return (
-    <div className="fade-in relative aspect-[16/9] rounded-lg overflow-hidden bg-neutral-200 border border-neutral-200">
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={imgSrc} alt={field.ten_san}
-        className="absolute inset-0 w-full h-full object-cover" />
-      <div className="pitch-overlay absolute inset-0" />
-
-      <div className="absolute bottom-4 left-5 right-5 text-white">
-        <div className="text-2xl md:text-3xl font-bold drop-shadow-lg">{field.ten_san}</div>
-        <div className="text-sm opacity-95 drop-shadow">
-          {field.loai_san === "SAN_5" ? "Sân 5 người" : field.loai_san === "SAN_7" ? "Sân 7 người" : "Sân 11 người"} · Sức chứa {field.suc_chua} người
-        </div>
-        {field.mo_ta && <div className="text-xs opacity-90 mt-1 drop-shadow line-clamp-1">{field.mo_ta}</div>}
-      </div>
-
-      <div className="absolute top-3 right-3 bg-white/95 rounded px-2.5 py-1 text-xs font-bold text-red-700 shadow">
-        {formatVND(field.gia_tieu_chuan)}/h
-      </div>
-    </div>
-  );
-}
-
-function PitchMini({ field, allFields }: { field: Field; allFields: Field[] }) {
-  const idx = allFields.findIndex((f) => f.id === field.id);
-  const imgIdx = (idx >= 0 ? idx : 0) % 6 + 1;
-  const imgSrc = `/fields/img-${imgIdx}.jpg`;
-
-  return (
-    <div className="relative w-full h-full bg-neutral-200">
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={imgSrc} alt={field.ten_san}
-        className="absolute inset-0 w-full h-full object-cover" />
-      <div className="absolute inset-0 bg-black/20" />
-      <span className="absolute bottom-1 left-1 right-1 text-white text-[10px] font-bold drop-shadow text-center">
-        {field.ten_san.split(" - ")[0]}
-      </span>
-    </div>
   );
 }
