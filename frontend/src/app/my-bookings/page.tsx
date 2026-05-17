@@ -202,13 +202,16 @@ function CancelModal({ booking, onClose, onSuccess }: any) {
       </div>
       <label className="block text-sm font-semibold mb-1.5">Lý do hủy</label>
       <textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={3}
-        className="w-full px-3 py-2.5 rounded-xl border border-ink-900/10 focus:border-brand-500 outline-none resize-none"
+        className="w-full px-3 py-2.5 rounded-xl border border-input focus:border-primary outline-none resize-none bg-background"
         placeholder="Ví dụ: Đổi lịch họp đột xuất..." />
-      {err && <div className="mt-2 p-2 rounded-lg bg-red-50 border border-red-200 text-red-700 text-xs">{err}</div>}
-      <div className="flex gap-2 mt-4">
-        <button onClick={onClose} className="flex-1 py-2.5 rounded-xl border border-ink-900/10 font-semibold">Quay lại</button>
-        <button onClick={submit} disabled={loading}
-          className="flex-1 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white font-semibold disabled:opacity-50">
+      {err && <div className="mt-2 p-3 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive text-sm">{err}</div>}
+      <div className="flex gap-2 mt-5">
+        <button type="button" onClick={onClose} disabled={loading}
+          className="flex-1 py-3 rounded-2xl border border-border hover:bg-secondary font-semibold disabled:opacity-50 transition-colors">
+          Quay lại
+        </button>
+        <button type="button" onClick={submit} disabled={loading}
+          className="flex-1 py-3 rounded-2xl bg-destructive hover:bg-destructive/90 text-destructive-foreground font-semibold disabled:opacity-50 transition-colors">
           {loading ? "Đang hủy..." : "Xác nhận hủy"}
         </button>
       </div>
@@ -255,14 +258,32 @@ function FeedbackModal({ booking, onClose, onSuccess }: any) {
       </div>
       <label className="block text-sm font-semibold mt-4 mb-1.5">Nhận xét</label>
       <textarea value={nhanXet} onChange={(e) => setNX(e.target.value)} rows={3} maxLength={500}
-        className="w-full px-3 py-2.5 rounded-xl border border-ink-900/10 focus:border-brand-500 outline-none resize-none"
+        className="w-full px-3 py-2.5 rounded-xl border border-input bg-background focus:border-primary focus:ring-4 focus:ring-primary/10 outline-none resize-none transition-all"
         placeholder="Trải nghiệm của bạn..." />
-      {err && <div className="mt-2 p-2 rounded-lg bg-red-50 border border-red-200 text-red-700 text-xs">{err}</div>}
-      <div className="flex gap-2 mt-4">
-        <button onClick={onClose} className="flex-1 py-2.5 rounded-xl border border-ink-900/10 font-semibold">Hủy</button>
-        <button onClick={submit} disabled={loading}
-          className="flex-1 py-2.5 rounded-xl bg-ink-900 hover:bg-ink-800 text-white font-semibold disabled:opacity-50">
-          {loading ? "Đang gửi..." : "Gửi đánh giá"}
+      {err && <div className="mt-2 p-3 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive text-sm">{err}</div>}
+      <div className="flex gap-2 mt-5">
+        <button
+          type="button"
+          onClick={onClose}
+          disabled={loading}
+          className="flex-1 py-3 rounded-2xl border border-border hover:bg-secondary font-semibold disabled:opacity-50 transition-colors"
+        >
+          Hủy
+        </button>
+        <button
+          type="button"
+          onClick={submit}
+          disabled={loading}
+          className="flex-1 py-3 rounded-2xl bg-primary hover:bg-primary/90 text-primary-foreground font-semibold disabled:opacity-50 shadow-lg shadow-primary/25 transition-all flex items-center justify-center gap-2"
+        >
+          {loading ? (
+            <>
+              <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              <span>Đang gửi...</span>
+            </>
+          ) : (
+            <span>Gửi đánh giá</span>
+          )}
         </button>
       </div>
     </ModalShell>
@@ -285,11 +306,11 @@ function StarRow({ label, value, onChange }: { label: string; value: number; onC
 
 function ModalShell({ onClose, title, children }: any) {
   return (
-    <div className="fixed inset-0 z-50 bg-ink-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="bg-white rounded-3xl w-full max-w-md shadow-2xl">
-        <div className="flex items-center justify-between p-5 border-b border-ink-900/5">
-          <h3 className="font-display text-2xl">{title}</h3>
-          <button onClick={onClose} className="p-1.5 hover:bg-ink-900/5 rounded-lg"><X size={18} /></button>
+    <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+      <div className="bg-card rounded-3xl w-full max-w-md shadow-2xl border border-border max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between p-5 border-b border-border">
+          <h3 className="text-2xl font-display font-bold text-foreground">{title}</h3>
+          <button onClick={onClose} className="p-2 hover:bg-secondary rounded-xl transition-colors"><X size={18} /></button>
         </div>
         <div className="p-5">{children}</div>
       </div>

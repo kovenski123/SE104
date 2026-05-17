@@ -4,11 +4,11 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import Navbar from "@/components/Navbar";
-import { apiGet, apiPost, formatVND } from "@/lib/api";
+import { apiGet, apiPost, formatVND, getUser } from "@/lib/api";
 import { 
   AlertCircle, CheckCircle2, MapPin, Phone, User, Mail, 
   Wifi, Car, Coffee, Loader2, Clock, Users, Zap, ChevronRight,
-  Star, Calendar
+  Star, Calendar, Sparkles
 } from "lucide-react";
 
 // Giờ bắt đầu: mỗi 30 phút từ 6:00 đến 22:00
@@ -66,6 +66,7 @@ export default function BookingPage() {
   const [submitting, setSubmitting] = useState(false);
   const [err, setErr] = useState("");
   const [loadErr, setLoadErr] = useState("");
+  const [memberStatus, setMemberStatus] = useState<{ tier: string; tier_name: string; discount_percent: number } | null>(null);
 
   const targetDate = useMemo(() => {
     const d = new Date();
@@ -92,6 +93,23 @@ export default function BookingPage() {
             : `Lỗi: ${e.message}`
         );
       });
+
+    // Load membership tier nếu user đã login để áp giảm giá tự động
+    const u = getUser();
+    if (u) {
+      apiGet("/api/memberships/me/status")
+        .then((s) => setMemberStatus({
+          tier: s.tier,
+          tier_name: s.tier_name,
+          discount_percent: s.discount_percent,
+        }))
+        .catch(() => {});
+
+      // Auto-fill thông tin liên hệ từ user đã login
+      setTenKhach(u.ho_ten || "");
+      setSdtKhach(u.sdt || "");
+      setEmailKhach(u.email || "");
+    }
   }, []);
 
   useEffect(() => {
@@ -162,7 +180,13 @@ export default function BookingPage() {
     }, 0);
   }, [chosenSvc, services]);
 
-  const tongCong = tienSan + tienDV;
+  // Giảm giá membership (chỉ áp dụng cho tiền sân, không áp cho dịch vụ)
+  const giamGia = useMemo(() => {
+    if (!memberStatus || memberStatus.discount_percent === 0) return 0;
+    return Math.round(tienSan * memberStatus.discount_percent / 100);
+  }, [tienSan, memberStatus]);
+
+  const tongCong = tienSan + tienDV - giamGia;
 
   async function submit() {
     setErr("");
@@ -278,6 +302,33 @@ export default function BookingPage() {
         <div className="grid lg:grid-cols-3 gap-6">
           {/* Main Content */}
           <div className="lg:col-span-2 space-y-6">
+            {/* Active Field Preview Image */}
+            {activeField && (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                key={activeField.id}
+                className="relative aspect-[16/9] rounded-3xl overflow-hidden border border-border shadow-lg"
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={`/fields/img-${(fields.findIndex((f) => f.id === activeField.id) % 6) + 1}.jpg`}
+                  alt={activeField.ten_san}
+                  className="absolute inset-0 w-full h-full object-cover"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
+                <div className="absolute bottom-0 left-0 right-0 p-5 text-white">
+                  <div className="font-display font-bold text-2xl mb-1 drop-shadow-lg">{activeField.ten_san}</div>
+                  <div className="text-sm opacity-90 drop-shadow">
+                    {activeField.loai_san === "SAN_5" ? "Sân 5 người" : activeField.loai_san === "SAN_7" ? "Sân 7 người" : "Sân 11 người"} · Sức chứa {activeField.suc_chua} người
+                  </div>
+                </div>
+                <div className="absolute top-3 right-3 bg-white/95 rounded-xl px-3 py-1.5 text-sm font-bold text-primary shadow-lg">
+                  {formatVND(activeField.gia_tieu_chuan)}/h
+                </div>
+              </motion.div>
+            )}
+
             {/* Field Selection */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
@@ -290,25 +341,35 @@ export default function BookingPage() {
                 Chọn sân
               </h2>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                {fields.map((f) => (
+                {fields.map((f, idx) => (
                   <button
                     key={f.id}
                     onClick={() => setActiveField(f)}
-                    className={`p-4 rounded-2xl border-2 text-left transition-all duration-200 slot-card ${
+                    className={`rounded-2xl border-2 text-left overflow-hidden transition-all duration-200 ${
                       activeField.id === f.id
-                        ? "border-primary bg-primary/5 shadow-lg shadow-primary/10"
-                        : "border-border hover:border-primary/30 bg-card"
+                        ? "border-primary shadow-lg shadow-primary/20 scale-[1.02]"
+                        : "border-border hover:border-primary/30 hover:scale-[1.01]"
                     }`}
                   >
-                    <div className="flex items-center gap-2 mb-2">
-                      <span className="text-2xl">⚽</span>
-                      <span className="font-bold text-foreground">{f.ten_san.split(" - ")[0]}</span>
+                    <div className="relative aspect-[4/3]">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={`/fields/img-${(idx % 6) + 1}.jpg`}
+                        alt={f.ten_san}
+                        className="absolute inset-0 w-full h-full object-cover"
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+                      <div className="absolute bottom-2 left-2 right-2 text-white">
+                        <div className="font-bold text-sm drop-shadow">{f.ten_san.split(" - ")[0]}</div>
+                      </div>
                     </div>
-                    <div className="text-xs text-muted-foreground mb-1">
-                      {f.loai_san === "SAN_5" ? "5 vs 5" : f.loai_san === "SAN_7" ? "7 vs 7" : "11 vs 11"}
-                    </div>
-                    <div className="text-sm font-semibold text-primary">
-                      {formatVND(f.gia_tieu_chuan)}/h
+                    <div className="p-3 bg-card">
+                      <div className="text-xs text-muted-foreground mb-0.5">
+                        {f.loai_san === "SAN_5" ? "5 vs 5" : f.loai_san === "SAN_7" ? "7 vs 7" : "11 vs 11"}
+                      </div>
+                      <div className="text-sm font-semibold text-primary">
+                        {formatVND(f.gia_tieu_chuan)}/h
+                      </div>
                     </div>
                   </button>
                 ))}
@@ -598,6 +659,19 @@ export default function BookingPage() {
                 </div>
               </div>
 
+              {/* Membership badge */}
+              {memberStatus && memberStatus.discount_percent > 0 && (
+                <div className="border-t border-border pt-4 mb-2">
+                  <div className="flex items-center gap-2 p-3 rounded-xl bg-gradient-to-r from-primary/10 to-accent/10 border border-primary/20">
+                    <Sparkles className="w-4 h-4 text-primary shrink-0" />
+                    <div className="flex-1 text-xs">
+                      <div className="font-semibold text-foreground">Thẻ {memberStatus.tier_name}</div>
+                      <div className="text-muted-foreground">Tự động giảm {memberStatus.discount_percent}% tiền sân</div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Pricing */}
               <div className="border-t border-border pt-4 space-y-2">
                 <div className="flex items-center justify-between text-sm">
@@ -608,6 +682,15 @@ export default function BookingPage() {
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-muted-foreground">Dịch vụ</span>
                     <span className="font-medium text-foreground">{formatVND(tienDV)}</span>
+                  </div>
+                )}
+                {giamGia > 0 && (
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-primary flex items-center gap-1">
+                      <Sparkles className="w-3.5 h-3.5" />
+                      Giảm thẻ {memberStatus?.tier_name} (-{memberStatus?.discount_percent}%)
+                    </span>
+                    <span className="font-semibold text-primary">−{formatVND(giamGia)}</span>
                   </div>
                 )}
                 <div className="flex items-center justify-between pt-2 border-t border-border">

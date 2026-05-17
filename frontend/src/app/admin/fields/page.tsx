@@ -1,7 +1,8 @@
 "use client";
 import { useEffect, useState } from "react";
+import { motion } from "framer-motion";
 import { apiGet, apiPost, apiPut, formatVND } from "@/lib/api";
-import { Plus, Edit2, X, Loader2 } from "lucide-react";
+import { Plus, Edit2, X, Loader2, MapPin } from "lucide-react";
 
 const STATUS_LABEL: Record<string, string> = {
   HOAT_DONG: "Hoạt động", BAO_TRI: "Bảo trì", DONG_CUA: "Đóng cửa",
@@ -22,63 +23,79 @@ export default function FieldsAdmin() {
       setLoading(false);
     }
   }
-
   useEffect(() => { load(); }, []);
 
   return (
-    <div className="space-y-5">
-      <div className="flex items-end justify-between flex-wrap gap-3">
+    <div className="space-y-6">
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="flex items-end justify-between flex-wrap gap-3">
         <div>
-          <div className="text-xs font-bold tracking-[0.25em] text-brand-600 mb-2">CƠ SỞ VẬT CHẤT</div>
-          <h1 className="font-display text-4xl">QUẢN LÝ SÂN</h1>
+          <div className="flex items-center gap-3 mb-2">
+            <div className="w-3 h-3 bg-primary rounded-full pulse-dot" />
+            <span className="text-sm font-medium text-primary uppercase tracking-wider">Cơ sở vật chất</span>
+          </div>
+          <h1 className="text-3xl md:text-4xl font-display font-bold text-foreground">Quản lý sân</h1>
+          <p className="text-muted-foreground text-sm mt-1">Thêm, sửa, ngưng hoạt động các sân bóng</p>
         </div>
         <button onClick={() => setCreating(true)}
-          className="px-4 py-2.5 bg-ink-900 hover:bg-ink-800 text-white rounded-xl text-sm font-semibold flex items-center gap-2">
-          <Plus size={16} /> Thêm sân
+          className="px-5 py-3 bg-primary hover:bg-primary/90 text-primary-foreground rounded-2xl text-sm font-semibold flex items-center gap-2 shadow-lg shadow-primary/25 transition-all">
+          <Plus className="w-4 h-4" /> Thêm sân mới
         </button>
-      </div>
+      </motion.div>
 
       {loading ? (
-        <div className="p-12 text-center text-ink-400"><Loader2 className="animate-spin mx-auto" /></div>
-      ) : (
-        <div className="bg-white rounded-2xl border border-ink-900/5 overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-ink-900/[0.03] text-xs font-bold text-ink-400">
-              <tr>
-                <th className="text-left p-3">TÊN SÂN</th>
-                <th className="text-left p-3">LOẠI</th>
-                <th className="text-right p-3">SỨC CHỨA</th>
-                <th className="text-right p-3">GIÁ THƯỜNG</th>
-                <th className="text-right p-3">GIÁ CAO ĐIỂM</th>
-                <th className="text-center p-3">TRẠNG THÁI</th>
-                <th className="p-3"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {list.map((f) => (
-                <tr key={f.id} className="border-t border-ink-900/5">
-                  <td className="p-3 font-semibold">{f.ten_san}</td>
-                  <td className="p-3">{f.loai_san}</td>
-                  <td className="p-3 text-right">{f.suc_chua}</td>
-                  <td className="p-3 text-right">{formatVND(f.gia_tieu_chuan)}</td>
-                  <td className="p-3 text-right">{formatVND(f.gia_cao_diem)}</td>
-                  <td className="p-3 text-center">
-                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                      f.trang_thai === "HOAT_DONG" ? "bg-brand-100 text-brand-700" :
-                      f.trang_thai === "BAO_TRI" ? "bg-amber-100 text-amber-800" :
-                      "bg-red-100 text-red-700"
-                    }`}>{STATUS_LABEL[f.trang_thai]}</span>
-                  </td>
-                  <td className="p-3 text-right">
-                    <button onClick={() => setEditing(f)} className="p-1.5 hover:bg-ink-900/5 rounded-lg">
-                      <Edit2 size={14} />
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="p-16 text-center"><Loader2 className="w-8 h-8 animate-spin mx-auto text-primary" /></div>
+      ) : list.length === 0 ? (
+        <div className="bg-card rounded-3xl p-16 text-center border border-border">
+          <MapPin className="w-16 h-16 mx-auto mb-4 text-muted-foreground/30" />
+          <p className="text-muted-foreground font-medium mb-4">Chưa có sân nào</p>
+          <button onClick={() => setCreating(true)}
+            className="px-5 py-3 bg-primary text-primary-foreground rounded-2xl text-sm font-semibold inline-flex items-center gap-2">
+            <Plus className="w-4 h-4" /> Thêm sân đầu tiên
+          </button>
         </div>
+      ) : (
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
+          className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {list.map((f, idx) => (
+            <div key={f.id} className="bg-card rounded-3xl border border-border overflow-hidden card-hover">
+              <div className="relative aspect-[16/10]">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={`/fields/img-${(idx % 6) + 1}.jpg`} alt={f.ten_san} className="absolute inset-0 w-full h-full object-cover" />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
+                <div className="absolute top-3 right-3">
+                  <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${
+                    f.trang_thai === "HOAT_DONG" ? "bg-primary text-primary-foreground" :
+                    f.trang_thai === "BAO_TRI" ? "bg-accent text-accent-foreground" :
+                    "bg-destructive text-destructive-foreground"
+                  }`}>{STATUS_LABEL[f.trang_thai]}</span>
+                </div>
+                <div className="absolute bottom-3 left-3 right-3 text-white">
+                  <div className="font-display font-bold text-xl drop-shadow">{f.ten_san}</div>
+                  <div className="text-xs opacity-90">
+                    {f.loai_san === "SAN_5" ? "Sân 5 người" : f.loai_san === "SAN_7" ? "Sân 7 người" : "Sân 11 người"} · {f.suc_chua} người
+                  </div>
+                </div>
+              </div>
+              <div className="p-4">
+                <div className="grid grid-cols-2 gap-3 mb-3 text-sm">
+                  <div>
+                    <div className="text-xs text-muted-foreground">Giá thường</div>
+                    <div className="font-bold text-foreground">{formatVND(f.gia_tieu_chuan)}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-muted-foreground">Cao điểm</div>
+                    <div className="font-bold text-primary">{formatVND(f.gia_cao_diem)}</div>
+                  </div>
+                </div>
+                {f.mo_ta && <div className="text-xs text-muted-foreground mb-3 line-clamp-2">{f.mo_ta}</div>}
+                <button onClick={() => setEditing(f)}
+                  className="w-full py-2.5 rounded-xl border border-border hover:bg-secondary text-sm font-semibold flex items-center justify-center gap-2 transition-colors">
+                  <Edit2 className="w-4 h-4" /> Chỉnh sửa
+                </button>
+              </div>
+            </div>
+          ))}
+        </motion.div>
       )}
 
       {(editing || creating) && (
@@ -103,69 +120,64 @@ function FieldModal({ field, onClose, onSuccess }: any) {
   const [loading, setLoading] = useState(false);
 
   async function submit() {
-    setLoading(true);
-    setErr("");
+    if (!form.ten_san.trim()) { setErr("Vui lòng nhập tên sân"); return; }
+    setLoading(true); setErr("");
     try {
-      if (field) {
-        await apiPut(`/api/fields/${field.id}`, form);
-      } else {
-        await apiPost("/api/fields", form);
-      }
+      if (field) await apiPut(`/api/fields/${field.id}`, form);
+      else await apiPost("/api/fields", form);
       onSuccess();
-    } catch (e: any) {
-      setErr(e.message);
-    } finally {
-      setLoading(false);
-    }
+    } catch (e: any) { setErr(e.message); }
+    finally { setLoading(false); }
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-ink-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="bg-white rounded-3xl w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-2xl">
-        <div className="flex items-center justify-between p-5 border-b border-ink-900/5">
-          <h3 className="font-display text-2xl">{field ? "SỬA SÂN" : "THÊM SÂN"}</h3>
-          <button onClick={onClose} className="p-1.5 hover:bg-ink-900/5 rounded-lg"><X size={18} /></button>
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+      <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="bg-card rounded-3xl w-full max-w-lg my-8 shadow-2xl border border-border">
+        <div className="flex items-center justify-between p-5 border-b border-border sticky top-0 bg-card rounded-t-3xl">
+          <h3 className="text-2xl font-display font-bold">{field ? "Sửa sân" : "Thêm sân mới"}</h3>
+          <button onClick={onClose} className="p-2 hover:bg-secondary rounded-xl"><X className="w-5 h-5" /></button>
         </div>
         <div className="p-5 space-y-3">
-          <Input label="Tên sân" value={form.ten_san} onChange={(v) => setForm({ ...form, ten_san: v })} />
-          <Select label="Loại sân" value={form.loai_san} onChange={(v) => setForm({ ...form, loai_san: v })}
-            options={[["SAN_5", "Sân 5"], ["SAN_7", "Sân 7"], ["SAN_11", "Sân 11"]]} />
-          <Input label="Sức chứa" type="number" value={form.suc_chua} onChange={(v) => setForm({ ...form, suc_chua: parseInt(v) || 0 })} />
+          <Input label="Tên sân *" value={form.ten_san} onChange={(v: string) => setForm({ ...form, ten_san: v })} />
+          <Select label="Loại sân" value={form.loai_san} onChange={(v: string) => setForm({ ...form, loai_san: v })}
+            options={[["SAN_5", "Sân 5 người"], ["SAN_7", "Sân 7 người"], ["SAN_11", "Sân 11 người"]]} />
+          <Input label="Sức chứa (người)" type="number" value={form.suc_chua} onChange={(v: string) => setForm({ ...form, suc_chua: parseInt(v) || 0 })} />
           <div className="grid grid-cols-2 gap-3">
             <Input label="Giá thường (VND/h)" type="number" value={form.gia_tieu_chuan}
-              onChange={(v) => setForm({ ...form, gia_tieu_chuan: parseFloat(v) || 0 })} />
-            <Input label="Giá cao điểm (VND/h)" type="number" value={form.gia_cao_diem}
-              onChange={(v) => setForm({ ...form, gia_cao_diem: parseFloat(v) || 0 })} />
+              onChange={(v: string) => setForm({ ...form, gia_tieu_chuan: parseFloat(v) || 0 })} />
+            <Input label="Giá cao điểm" type="number" value={form.gia_cao_diem}
+              onChange={(v: string) => setForm({ ...form, gia_cao_diem: parseFloat(v) || 0 })} />
           </div>
-          <Input label="Mô tả" value={form.mo_ta} onChange={(v) => setForm({ ...form, mo_ta: v })} textarea />
-          <Select label="Trạng thái" value={form.trang_thai} onChange={(v) => setForm({ ...form, trang_thai: v })}
+          <Input label="Mô tả" value={form.mo_ta} onChange={(v: string) => setForm({ ...form, mo_ta: v })} textarea />
+          <Select label="Trạng thái" value={form.trang_thai} onChange={(v: string) => setForm({ ...form, trang_thai: v })}
             options={[["HOAT_DONG", "Hoạt động"], ["BAO_TRI", "Bảo trì"], ["DONG_CUA", "Đóng cửa"]]} />
 
-          {err && <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm">{err}</div>}
+          {err && <div className="p-3 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive text-sm">{err}</div>}
 
           <div className="flex gap-2 pt-2">
-            <button onClick={onClose} className="flex-1 py-2.5 rounded-xl border border-ink-900/10 font-semibold">Hủy</button>
-            <button onClick={submit} disabled={loading}
-              className="flex-1 py-2.5 rounded-xl bg-ink-900 text-white font-semibold disabled:opacity-50">
+            <button type="button" onClick={onClose} disabled={loading}
+              className="flex-1 py-3 rounded-2xl border border-border hover:bg-secondary font-semibold transition-colors disabled:opacity-50">Hủy</button>
+            <button type="button" onClick={submit} disabled={loading}
+              className="flex-1 py-3 rounded-2xl bg-primary hover:bg-primary/90 text-primary-foreground font-semibold shadow-lg shadow-primary/25 disabled:opacity-50 transition-all">
               {loading ? "Đang lưu..." : "Lưu"}
             </button>
           </div>
         </div>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   );
 }
 
 function Input({ label, value, onChange, type = "text", textarea }: any) {
   return (
     <label className="block">
-      <span className="text-sm font-semibold mb-1.5 block">{label}</span>
+      <span className="text-sm font-semibold mb-1.5 block text-foreground">{label}</span>
       {textarea ? (
         <textarea value={value} onChange={(e) => onChange(e.target.value)} rows={2}
-          className="w-full px-3 py-2 rounded-xl border border-ink-900/10 focus:border-brand-500 outline-none resize-none" />
+          className="w-full px-3 py-2.5 rounded-xl border border-input bg-background focus:border-primary focus:ring-4 focus:ring-primary/10 outline-none resize-none transition-all" />
       ) : (
         <input type={type} value={value} onChange={(e) => onChange(e.target.value)}
-          className="w-full px-3 py-2 rounded-xl border border-ink-900/10 focus:border-brand-500 outline-none" />
+          className="w-full px-3 py-2.5 rounded-xl border border-input bg-background focus:border-primary focus:ring-4 focus:ring-primary/10 outline-none transition-all" />
       )}
     </label>
   );
@@ -174,9 +186,9 @@ function Input({ label, value, onChange, type = "text", textarea }: any) {
 function Select({ label, value, onChange, options }: any) {
   return (
     <label className="block">
-      <span className="text-sm font-semibold mb-1.5 block">{label}</span>
+      <span className="text-sm font-semibold mb-1.5 block text-foreground">{label}</span>
       <select value={value} onChange={(e) => onChange(e.target.value)}
-        className="w-full px-3 py-2 rounded-xl border border-ink-900/10 focus:border-brand-500 outline-none bg-white">
+        className="w-full px-3 py-2.5 rounded-xl border border-input bg-background focus:border-primary focus:ring-4 focus:ring-primary/10 outline-none transition-all">
         {options.map(([v, l]: any) => <option key={v} value={v}>{l}</option>)}
       </select>
     </label>

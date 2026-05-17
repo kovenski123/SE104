@@ -121,8 +121,21 @@
   * {
     @apply border-border outline-ring/50;
   }
+  html {
+    /* Fix mobile scroll bounce showing white */
+    background: var(--background);
+    overscroll-behavior-y: none;
+  }
   body {
     @apply bg-background text-foreground;
+    /* Prevent rubber-band white flash on iOS */
+    overscroll-behavior-y: none;
+    min-height: 100vh;
+  }
+  /* Ensure html and body fill viewport */
+  html, body {
+    margin: 0;
+    padding: 0;
   }
 }
 

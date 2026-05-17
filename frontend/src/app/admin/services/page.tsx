@@ -1,7 +1,8 @@
 "use client";
 import { useEffect, useState } from "react";
+import { motion } from "framer-motion";
 import { apiGet, apiPost, apiPut, formatVND } from "@/lib/api";
-import { Plus, Edit2, X, Loader2, Recycle } from "lucide-react";
+import { Plus, Edit2, X, Loader2, Recycle, Package } from "lucide-react";
 
 export default function ServicesAdmin() {
   const [list, setList] = useState<any[]>([]);
@@ -11,76 +12,86 @@ export default function ServicesAdmin() {
 
   async function load() {
     setLoading(true);
-    try {
-      const r = await apiGet("/api/services");
-      setList(r);
-    } finally {
-      setLoading(false);
-    }
+    try { setList(await apiGet("/api/services")); }
+    finally { setLoading(false); }
   }
   useEffect(() => { load(); }, []);
 
   return (
-    <div className="space-y-5">
-      <div className="flex items-end justify-between flex-wrap gap-3">
+    <div className="space-y-6">
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="flex items-end justify-between flex-wrap gap-3">
         <div>
-          <div className="text-xs font-bold tracking-[0.25em] text-red-700 mb-2">SẢN PHẨM</div>
-          <h1 className="text-3xl md:text-4xl font-bold text-ink-900">Dịch vụ</h1>
-          <p className="text-sm text-ink-400 mt-1">Đồ thuê sẽ tự restock khi booking hoàn thành</p>
+          <div className="flex items-center gap-3 mb-2">
+            <div className="w-3 h-3 bg-primary rounded-full pulse-dot" />
+            <span className="text-sm font-medium text-primary uppercase tracking-wider">Sản phẩm</span>
+          </div>
+          <h1 className="text-3xl md:text-4xl font-display font-bold text-foreground">Dịch vụ</h1>
+          <p className="text-muted-foreground text-sm mt-1">Đồ thuê sẽ tự restock khi booking hoàn thành</p>
         </div>
         <button onClick={() => setCreating(true)}
-          className="px-4 py-2.5 bg-ink-900 text-white rounded-xl text-sm font-semibold flex items-center gap-2">
-          <Plus size={16} /> Thêm dịch vụ
+          className="px-5 py-3 bg-primary hover:bg-primary/90 text-primary-foreground rounded-2xl text-sm font-semibold flex items-center gap-2 shadow-lg shadow-primary/25 transition-all">
+          <Plus className="w-4 h-4" /> Thêm dịch vụ
         </button>
-      </div>
+      </motion.div>
 
       {loading ? (
-        <div className="p-12 text-center text-ink-400"><Loader2 className="animate-spin mx-auto" /></div>
-      ) : (
-        <div className="bg-white rounded-2xl border border-neutral-200 overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-neutral-50 text-xs font-bold text-ink-400">
-              <tr>
-                <th className="text-left p-3">TÊN DỊCH VỤ</th>
-                <th className="text-center p-3">LOẠI</th>
-                <th className="text-right p-3">ĐƠN GIÁ</th>
-                <th className="text-center p-3">ĐƠN VỊ</th>
-                <th className="text-right p-3">TỒN KHO</th>
-                <th className="text-center p-3">TRẠNG THÁI</th>
-                <th className="p-3"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {list.map((s) => (
-                <tr key={s.id} className="border-t border-neutral-100">
-                  <td className="p-3 font-semibold">{s.ten_dich_vu}</td>
-                  <td className="p-3 text-center">
-                    {s.la_cho_thue ? (
-                      <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">
-                        <Recycle size={10} /> Đồ thuê
-                      </span>
-                    ) : (
-                      <span className="text-[10px] text-ink-400">Tiêu hao</span>
-                    )}
-                  </td>
-                  <td className="p-3 text-right">{formatVND(s.don_gia)}</td>
-                  <td className="p-3 text-center">{s.don_vi_tinh}</td>
-                  <td className={`p-3 text-right font-semibold ${s.ton_kho < 5 ? "text-red-600" : ""}`}>{s.ton_kho}</td>
-                  <td className="p-3 text-center">
-                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                      s.trang_thai === "HOAT_DONG" ? "bg-green-100 text-green-700" : "bg-neutral-100 text-ink-400"
-                    }`}>{s.trang_thai === "HOAT_DONG" ? "Hoạt động" : "Ngừng KD"}</span>
-                  </td>
-                  <td className="p-3 text-right">
-                    <button onClick={() => setEditing(s)} className="p-1.5 hover:bg-neutral-100 rounded-lg">
-                      <Edit2 size={14} />
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="p-16 text-center"><Loader2 className="w-8 h-8 animate-spin mx-auto text-primary" /></div>
+      ) : list.length === 0 ? (
+        <div className="bg-card rounded-3xl p-16 text-center border border-border">
+          <Package className="w-16 h-16 mx-auto mb-4 text-muted-foreground/30" />
+          <p className="text-muted-foreground font-medium mb-4">Chưa có dịch vụ nào</p>
+          <button onClick={() => setCreating(true)}
+            className="px-5 py-3 bg-primary text-primary-foreground rounded-2xl text-sm font-semibold inline-flex items-center gap-2">
+            <Plus className="w-4 h-4" /> Thêm dịch vụ đầu tiên
+          </button>
         </div>
+      ) : (
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="bg-card rounded-3xl border border-border overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-secondary/50">
+                <tr className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                  <th className="text-left p-4">Tên dịch vụ</th>
+                  <th className="text-center p-4">Loại</th>
+                  <th className="text-right p-4">Đơn giá</th>
+                  <th className="text-center p-4">Đơn vị</th>
+                  <th className="text-right p-4">Tồn kho</th>
+                  <th className="text-center p-4">Trạng thái</th>
+                  <th className="p-4"></th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {list.map((s) => (
+                  <tr key={s.id} className="hover:bg-secondary/30 transition-colors">
+                    <td className="p-4 font-semibold text-foreground">{s.ten_dich_vu}</td>
+                    <td className="p-4 text-center">
+                      {s.la_cho_thue ? (
+                        <span className="inline-flex items-center gap-1 text-xs font-bold px-2 py-1 rounded-full bg-chart-3/10 text-chart-3 border border-chart-3/20">
+                          <Recycle className="w-3 h-3" /> Đồ thuê
+                        </span>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">Tiêu hao</span>
+                      )}
+                    </td>
+                    <td className="p-4 text-right font-semibold text-foreground">{formatVND(s.don_gia)}</td>
+                    <td className="p-4 text-center text-muted-foreground">{s.don_vi_tinh}</td>
+                    <td className={`p-4 text-right font-bold ${s.ton_kho < 5 ? "text-destructive" : "text-foreground"}`}>{s.ton_kho}</td>
+                    <td className="p-4 text-center">
+                      <span className={`inline-flex text-xs font-bold px-2 py-1 rounded-full ${
+                        s.trang_thai === "HOAT_DONG" ? "bg-primary/10 text-primary border border-primary/20" : "bg-muted text-muted-foreground"
+                      }`}>{s.trang_thai === "HOAT_DONG" ? "Hoạt động" : "Ngừng KD"}</span>
+                    </td>
+                    <td className="p-4 text-right">
+                      <button onClick={() => setEditing(s)} className="p-2 hover:bg-secondary rounded-xl transition-colors">
+                        <Edit2 className="w-4 h-4" />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </motion.div>
       )}
 
       {(editing || creating) && (
@@ -104,45 +115,41 @@ function ServiceModal({ svc, onClose, onSuccess }: any) {
   const [loading, setLoading] = useState(false);
 
   async function submit() {
-    setLoading(true);
+    if (!form.ten_dich_vu.trim()) { setErr("Vui lòng nhập tên dịch vụ"); return; }
+    setLoading(true); setErr("");
     try {
       if (svc) await apiPut(`/api/services/${svc.id}`, form);
       else await apiPost("/api/services", form);
       onSuccess();
-    } catch (e: any) {
-      setErr(e.message);
-    } finally {
-      setLoading(false);
-    }
+    } catch (e: any) { setErr(e.message); }
+    finally { setLoading(false); }
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-ink-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="bg-white rounded-3xl w-full max-w-md shadow-2xl">
-        <div className="flex items-center justify-between p-5 border-b border-neutral-100">
-          <h3 className="text-2xl font-bold">{svc ? "Sửa dịch vụ" : "Thêm dịch vụ"}</h3>
-          <button onClick={onClose} className="p-1.5 hover:bg-neutral-100 rounded-lg"><X size={18} /></button>
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+      <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="bg-card rounded-3xl w-full max-w-md my-8 shadow-2xl border border-border">
+        <div className="flex items-center justify-between p-5 border-b border-border">
+          <h3 className="text-2xl font-display font-bold">{svc ? "Sửa dịch vụ" : "Thêm dịch vụ"}</h3>
+          <button onClick={onClose} className="p-2 hover:bg-secondary rounded-xl"><X className="w-5 h-5" /></button>
         </div>
         <div className="p-5 space-y-3">
-          <Input label="Tên" value={form.ten_dich_vu} onChange={(v) => setForm({ ...form, ten_dich_vu: v })} />
+          <Input label="Tên dịch vụ *" value={form.ten_dich_vu} onChange={(v: string) => setForm({ ...form, ten_dich_vu: v })} />
           <div className="grid grid-cols-2 gap-3">
-            <Input label="Đơn giá" type="number" value={form.don_gia} onChange={(v) => setForm({ ...form, don_gia: parseFloat(v) })} />
-            <Input label="Đơn vị" value={form.don_vi_tinh} onChange={(v) => setForm({ ...form, don_vi_tinh: v })} />
+            <Input label="Đơn giá" type="number" value={form.don_gia} onChange={(v: string) => setForm({ ...form, don_gia: parseFloat(v) || 0 })} />
+            <Input label="Đơn vị" value={form.don_vi_tinh} onChange={(v: string) => setForm({ ...form, don_vi_tinh: v })} />
           </div>
-          <Input label="Tồn kho" type="number" value={form.ton_kho} onChange={(v) => setForm({ ...form, ton_kho: parseInt(v) || 0 })} />
+          <Input label="Tồn kho" type="number" value={form.ton_kho} onChange={(v: string) => setForm({ ...form, ton_kho: parseInt(v) || 0 })} />
 
-          <label className="flex items-start gap-3 p-3 rounded-xl border border-neutral-200 cursor-pointer hover:bg-neutral-50">
+          <label className="flex items-start gap-3 p-4 rounded-xl border border-border cursor-pointer hover:bg-secondary/50 transition-colors">
             <input type="checkbox" checked={form.la_cho_thue}
               onChange={(e) => setForm({ ...form, la_cho_thue: e.target.checked })}
-              className="w-4 h-4 mt-0.5 accent-red-700" />
+              className="w-4 h-4 mt-0.5 accent-primary" />
             <div className="flex-1">
               <div className="text-sm font-semibold flex items-center gap-1.5">
-                <Recycle size={14} className="text-blue-600" />
-                Đây là đồ cho thuê (auto-restock)
+                <Recycle className="w-4 h-4 text-chart-3" /> Đây là đồ cho thuê (auto-restock)
               </div>
-              <div className="text-xs text-ink-400 mt-0.5">
-                VD: Giày, áo tập. Khi booking <strong>hoàn thành</strong>, tồn kho sẽ tự cộng lại số lượng đã thuê.
-                Bỏ chọn nếu là đồ tiêu hao (nước uống, băng đeo).
+              <div className="text-xs text-muted-foreground mt-1">
+                VD: Giày, áo tập. Khi booking hoàn thành, tồn kho tự cộng lại.
               </div>
             </div>
           </label>
@@ -150,24 +157,25 @@ function ServiceModal({ svc, onClose, onSuccess }: any) {
           <label className="block">
             <span className="text-sm font-semibold mb-1.5 block">Trạng thái</span>
             <select value={form.trang_thai} onChange={(e) => setForm({ ...form, trang_thai: e.target.value })}
-              className="w-full px-3 py-2 rounded-xl border border-neutral-200 outline-none bg-white">
+              className="w-full px-3 py-2.5 rounded-xl border border-input bg-background focus:border-primary focus:ring-4 focus:ring-primary/10 outline-none">
               <option value="HOAT_DONG">Hoạt động</option>
               <option value="NGUNG_KINH_DOANH">Ngừng kinh doanh</option>
             </select>
           </label>
 
-          {err && <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm">{err}</div>}
+          {err && <div className="p-3 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive text-sm">{err}</div>}
 
           <div className="flex gap-2 pt-2">
-            <button onClick={onClose} className="flex-1 py-2.5 rounded-xl border border-neutral-200 font-semibold">Hủy</button>
-            <button onClick={submit} disabled={loading}
-              className="flex-1 py-2.5 rounded-xl bg-ink-900 text-white font-semibold disabled:opacity-50">
-              {loading ? "..." : "Lưu"}
+            <button type="button" onClick={onClose} disabled={loading}
+              className="flex-1 py-3 rounded-2xl border border-border hover:bg-secondary font-semibold disabled:opacity-50">Hủy</button>
+            <button type="button" onClick={submit} disabled={loading}
+              className="flex-1 py-3 rounded-2xl bg-primary hover:bg-primary/90 text-primary-foreground font-semibold shadow-lg shadow-primary/25 disabled:opacity-50">
+              {loading ? "Đang lưu..." : "Lưu"}
             </button>
           </div>
         </div>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   );
 }
 
@@ -176,7 +184,7 @@ function Input({ label, value, onChange, type = "text" }: any) {
     <label className="block">
       <span className="text-sm font-semibold mb-1.5 block">{label}</span>
       <input type={type} value={value} onChange={(e) => onChange(e.target.value)}
-        className="w-full px-3 py-2 rounded-xl border border-neutral-200 focus:border-red-700 outline-none" />
+        className="w-full px-3 py-2.5 rounded-xl border border-input bg-background focus:border-primary focus:ring-4 focus:ring-primary/10 outline-none transition-all" />
     </label>
   );
 }
