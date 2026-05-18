@@ -93,14 +93,13 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 Backend chạy tại: **http://localhost:8000**
 Tài liệu API tự động (Swagger UI): **http://localhost:8000/docs**
 
-### 🗄️ Database: SQLite (mặc định) hay MySQL?
+### 🗄️ Database: SQLite, MySQL, hay Azure SQL?
 
 **SQLite** — mặc định, **không cần cấu hình gì**. Phù hợp dev/demo/đồ án.
-**MySQL** — production-ready, hỗ trợ concurrency cao hơn.
+**MySQL** — production-ready local hoặc VPS.
+**Azure SQL Database** — cloud-hosted, scalable, không lo backup/HA.
 
-#### Chuyển sang MySQL
-
-1) **Cài MySQL server + tạo database:**
+#### Option A: Chuyển sang MySQL
 
 ```sql
 CREATE DATABASE san_bong CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
@@ -109,31 +108,56 @@ GRANT ALL PRIVILEGES ON san_bong.* TO 'sanbong'@'localhost';
 FLUSH PRIVILEGES;
 ```
 
-2) **Set `DATABASE_URL` trong `backend/.env`:**
-
+Trong `.env`:
 ```bash
-cp .env.example .env
-# Sửa file .env:
 DATABASE_URL=mysql+pymysql://sanbong:your_password@localhost:3306/san_bong
 ```
 
-3) **Khởi tạo schema:**
+#### Option B: Chuyển sang Azure SQL Database
+
+**1) Tạo Azure SQL trên portal:**
+- portal.azure.com → Create resource → SQL Database
+- Server: tạo mới (ví dụ `sanbong-uit`), authentication: **SQL authentication**, lưu admin login + password
+- Networking → **Allow Azure services**: Yes; **Add current client IP**
+
+**2) Cài Microsoft ODBC Driver 18:**
+
+| OS | Lệnh |
+|---|---|
+| Windows | Tải .msi từ https://aka.ms/odbcdriver |
+| Mac | `brew install msodbcsql18` (sau khi `brew tap microsoft/mssql-release ...`) |
+| Ubuntu | `sudo ACCEPT_EULA=Y apt install msodbcsql18` (sau khi add Microsoft apt repo) |
+
+**3) Set `DATABASE_URL` trong `backend/.env`:**
 
 ```bash
-# Option A: Tự động qua SQLAlchemy
-python init_db.py
+DATABASE_URL=mssql+pyodbc://sqladmin:YourPass123!@sanbong-uit.database.windows.net:1433/san_bong?driver=ODBC+Driver+18+for+SQL+Server&Encrypt=yes&TrustServerCertificate=no
+```
 
-# Option B: Manual SQL (kiểm soát chi tiết hơn)
+⚠️ Password có ký tự đặc biệt phải URL-encode: `@` → `%40`, `!` → `%21`, `#` → `%23`, `$` → `%24`.
+
+**4) Test connection:**
+
+```bash
+python test_azure_connection.py
+```
+
+**5) Khởi tạo schema + seed:**
+
+```bash
+python init_db.py    # tạo 9 tables
+python seed.py       # seed data demo
+```
+
+Driver `pyodbc` đã có sẵn trong `requirements.txt`. Schema gồm 9 bảng: `users`, `fields`, `services`, `bookings`, `booking_services`, `invoices` (track refund status), `memberships`, `shifts`, `feedbacks`. Refund flow track qua `invoices.trang_thai` với 4 trạng thái: `CHUA_THANH_TOAN`, `DA_THANH_TOAN`, `CHO_HOAN_TIEN` (Pending Refund), `HOAN_TIEN` (Refunded).
+
+#### Init schema bằng SQL thủ công
+
+Chỉ với MySQL (Azure SQL syntax khác — dùng `init_db.py`):
+
+```bash
 mysql -u sanbong -p san_bong < schema.sql
 ```
-
-4) **Seed data demo:**
-
-```bash
-python seed.py
-```
-
-Driver `pymysql` đã có sẵn trong `requirements.txt`. Schema gồm 9 bảng: `users`, `fields`, `services`, `bookings`, `booking_services`, `invoices` (track refund status), `memberships`, `shifts`, `feedbacks`. Refund flow track qua `invoices.trang_thai` với 4 trạng thái: `CHUA_THANH_TOAN`, `DA_THANH_TOAN`, `CHO_HOAN_TIEN` (Pending Refund), `HOAN_TIEN` (Refunded).
 
 ### 2) Cài & chạy Frontend
 

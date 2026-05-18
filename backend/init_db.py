@@ -24,7 +24,7 @@ from app.models import (
 
 def main():
     info = get_db_info()
-    print(f"📊 Database: {info['driver']}")
+    print(f"📊 Database type: {info['kind']}")
     if not info['is_sqlite']:
         print(f"   Host: {info['host']}:{info['port']}")
         print(f"   Name: {info['database']}")
@@ -35,8 +35,16 @@ def main():
             print("✅ Kết nối database thành công")
     except Exception as e:
         print(f"❌ Không kết nối được database: {e}")
-        if not info['is_sqlite']:
-            print("\n💡 Kiểm tra:")
+        if info['is_mssql']:
+            print("\n💡 Azure SQL / SQL Server checklist:")
+            print("   1. ODBC Driver 18 đã cài? https://aka.ms/odbcdriver")
+            print("   2. Firewall Azure đã thêm IP của bạn? Portal → SQL Server → Networking")
+            print("   3. Connection string format:")
+            print("      mssql+pyodbc://USER:PWD@SERVER.database.windows.net:1433/DB?driver=ODBC+Driver+18+for+SQL+Server&Encrypt=yes")
+            print("   4. Password URL-encoded? (@→%40, !→%21, #→%23)")
+            print("   5. Chạy `python test_azure_connection.py` để debug chi tiết")
+        elif info['is_mysql']:
+            print("\n💡 MySQL checklist:")
             print("   1. MySQL server đang chạy?")
             print("   2. Database đã được tạo? CREATE DATABASE san_bong CHARACTER SET utf8mb4;")
             print("   3. User/password đúng?")
