@@ -178,6 +178,59 @@ npm run dev
 
 Frontend chạy tại: **http://localhost:3000**
 
+## 🌐 Triển khai Production (Render + Vercel)
+
+### Backend → Render (Free Tier)
+
+**Cách 1: One-click với render.yaml**
+
+1. Push code lên GitHub
+2. Vào [render.com](https://render.com) → **New** → **Blueprint** → connect repo
+3. Render tự đọc `backend/render.yaml`
+4. Vào service → **Environment** → set 2 biến:
+   - `DATABASE_URL` = chuỗi kết nối Azure SQL (chứa user `adminK` / password `Khang@123` → encode thành `Khang%40123`)
+   - `ALLOWED_ORIGINS` = `https://se104uit.vercel.app`
+
+**Cách 2: Manual**
+
+- New → Web Service → connect repo
+- Build command: `pip install -r requirements.txt`
+- Start command: `uvicorn app.main:app --host 0.0.0.0 --port $PORT` (hoặc dùng `./start.sh`)
+- Root directory: `backend`
+- Set env vars như trên
+
+⚠️ **Lưu ý**: Render Free Tier sleep sau 15 phút không có request. Lần wake-up đầu mất ~30s.
+
+### Frontend → Vercel
+
+1. Vào [vercel.com](https://vercel.com) → Import GitHub repo
+2. Framework: **Next.js** (auto-detect)
+3. Root directory: `frontend` (hoặc giữ root và Vercel sẽ đọc `vercel.json` ở root)
+4. **Environment Variables** → add:
+   - `NEXT_PUBLIC_API_URL` = `https://YOUR-RENDER-APP.onrender.com` (URL của Render service)
+5. Deploy
+
+### Connection string Azure SQL chính xác
+
+Sử dụng credentials đã cung cấp (`adminK` / `Khang@123`):
+
+```
+mssql+pyodbc://adminK:Khang%40123@<YOUR_SERVER>.database.windows.net:1433/san_bong?driver=ODBC+Driver+18+for+SQL+Server&Encrypt=yes&TrustServerCertificate=no&Connection+Timeout=30
+```
+
+⚠️ **Quan trọng**:
+- Password `Khang@123` chứa `@` → phải encode thành `%40` → `Khang%40123`
+- Thay `<YOUR_SERVER>` bằng server name thật từ Azure Portal
+- Azure SQL Firewall: cho phép "All Azure services" để Render IP qua được, hoặc add Render outbound IPs
+
+### Tóm tắt env vars cần set
+
+| Service | Variable | Value |
+|---|---|---|
+| **Render (backend)** | `DATABASE_URL` | `mssql+pyodbc://adminK:Khang%40123@...` |
+| **Render (backend)** | `ALLOWED_ORIGINS` | `https://se104uit.vercel.app` |
+| **Vercel (frontend)** | `NEXT_PUBLIC_API_URL` | `https://YOUR-RENDER-APP.onrender.com` |
+
 ## 🔐 Tài khoản demo
 
 Sau khi chạy `python seed.py`, các tài khoản sau được tạo sẵn:

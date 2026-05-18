@@ -8,7 +8,7 @@ import { apiGet, apiPost, formatVND, getUser } from "@/lib/api";
 import { 
   AlertCircle, CheckCircle2, MapPin, Phone, User, Mail, 
   Wifi, Car, Coffee, Loader2, Clock, Users, Zap, ChevronRight,
-  Star, Calendar, Sparkles
+  Star, Calendar, Sparkles, ChevronLeft, CalendarDays
 } from "lucide-react";
 
 // Giờ bắt đầu: mỗi 30 phút từ 6:00 đến 22:00
@@ -55,7 +55,19 @@ export default function BookingPage() {
   const [fields, setFields] = useState<Field[]>([]);
   const [services, setServices] = useState<Service[]>([]);
   const [activeField, setActiveField] = useState<Field | null>(null);
-  const [dateOffset, setDateOffset] = useState(0);
+  const [dateOffset, setDateOffset] = useState(0); // legacy unused
+  const today = useMemo(() => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }, []);
+  const [selectedDate, setSelectedDate] = useState<Date>(today);
+  const [calendarMonth, setCalendarMonth] = useState<Date>(() => {
+    const d = new Date();
+    d.setDate(1);
+    d.setHours(0, 0, 0, 0);
+    return d;
+  });
   const [bookedRanges, setBookedRanges] = useState<{ s: number; e: number }[]>([]);
   const [startTime, setStartTime] = useState<string | null>(null);
   const [duration, setDuration] = useState<number>(1);
@@ -68,12 +80,21 @@ export default function BookingPage() {
   const [loadErr, setLoadErr] = useState("");
   const [memberStatus, setMemberStatus] = useState<{ tier: string; tier_name: string; discount_percent: number } | null>(null);
 
-  const targetDate = useMemo(() => {
-    const d = new Date();
-    d.setDate(d.getDate() + dateOffset);
-    return d;
-  }, [dateOffset]);
-  const dateStr = targetDate.toISOString().slice(0, 10);
+  const targetDate = selectedDate;
+  // Format YYYY-MM-DD in local timezone (avoid timezone shift from toISOString)
+  const dateStr = useMemo(() => {
+    const y = selectedDate.getFullYear();
+    const m = String(selectedDate.getMonth() + 1).padStart(2, "0");
+    const d = String(selectedDate.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+  }, [selectedDate]);
+
+  const isToday = useMemo(() => {
+    const now = new Date();
+    return selectedDate.getDate() === now.getDate()
+      && selectedDate.getMonth() === now.getMonth()
+      && selectedDate.getFullYear() === now.getFullYear();
+  }, [selectedDate]);
 
   useEffect(() => {
     Promise.all([
@@ -388,29 +409,21 @@ export default function BookingPage() {
                 Chọn ngày & thời lượng
               </h2>
 
-              {/* Day Tabs */}
-              <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
-                {Array.from({ length: 7 }, (_, i) => {
-                  const d = new Date();
-                  d.setDate(d.getDate() + i);
-                  const isToday = i === 0;
-                  return (
-                    <button
-                      key={i}
-                      onClick={() => setDateOffset(i)}
-                      className={`flex-shrink-0 px-4 py-3 rounded-2xl text-center transition-all ${
-                        dateOffset === i
-                          ? "bg-primary text-primary-foreground shadow-lg shadow-primary/25"
-                          : "bg-secondary hover:bg-secondary/80 text-foreground"
-                      }`}
-                    >
-                      <div className="text-xs font-medium opacity-80">
-                        {isToday ? "Hôm nay" : DAY_LABELS[d.getDay()]}
-                      </div>
-                      <div className="text-lg font-bold">{d.getDate()}</div>
-                    </button>
-                  );
-                })}
+              {/* Full Calendar Picker — chọn ngày bất kỳ */}
+              <CalendarPicker
+                selected={selectedDate}
+                month={calendarMonth}
+                onMonthChange={setCalendarMonth}
+                onSelect={(d) => setSelectedDate(d)}
+                minDate={today}
+              />
+
+              {/* Quick presets */}
+              <div className="flex gap-2 flex-wrap mt-3 mb-6">
+                <QuickDateBtn label="Hôm nay" date={today} selected={selectedDate} onSelect={setSelectedDate} setMonth={setCalendarMonth} />
+                <QuickDateBtn label="Ngày mai" date={addDays(today, 1)} selected={selectedDate} onSelect={setSelectedDate} setMonth={setCalendarMonth} />
+                <QuickDateBtn label="Cuối tuần" date={nextWeekend(today)} selected={selectedDate} onSelect={setSelectedDate} setMonth={setCalendarMonth} />
+                <QuickDateBtn label="Tuần sau" date={addDays(today, 7)} selected={selectedDate} onSelect={setSelectedDate} setMonth={setCalendarMonth} />
               </div>
 
               {/* Duration */}
@@ -746,5 +759,199 @@ export default function BookingPage() {
         </div>
       </div>
     </>
+  );
+}
+
+// ============ Helpers ============
+function addDays(d: Date, n: number): Date {
+  const r = new Date(d);
+  r.setDate(r.getDate() + n);
+  r.setHours(0, 0, 0, 0);
+  return r;
+}
+
+function nextWeekend(d: Date): Date {
+  const r = new Date(d);
+  const day = r.getDay(); // 0=Sun, 6=Sat
+  const daysToSat = day === 6 ? 7 : (6 - day);
+  r.setDate(r.getDate() + daysToSat);
+  r.setHours(0, 0, 0, 0);
+  return r;
+}
+
+function sameDay(a: Date, b: Date): boolean {
+  return a.getFullYear() === b.getFullYear()
+    && a.getMonth() === b.getMonth()
+    && a.getDate() === b.getDate();
+}
+
+function QuickDateBtn({ label, date, selected, onSelect, setMonth }: {
+  label: string; date: Date; selected: Date; onSelect: (d: Date) => void; setMonth: (d: Date) => void;
+}) {
+  const active = sameDay(date, selected);
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        onSelect(date);
+        const m = new Date(date.getFullYear(), date.getMonth(), 1);
+        setMonth(m);
+      }}
+      className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
+        active ? "bg-primary text-primary-foreground" : "bg-secondary hover:bg-secondary/70 text-foreground"
+      }`}
+    >
+      {label} <span className="opacity-70 ml-1">{date.getDate()}/{date.getMonth() + 1}</span>
+    </button>
+  );
+}
+
+// ============ Calendar Picker ============
+const VN_DAYS = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"];
+const VN_MONTHS = [
+  "Tháng 1", "Tháng 2", "Tháng 3", "Tháng 4", "Tháng 5", "Tháng 6",
+  "Tháng 7", "Tháng 8", "Tháng 9", "Tháng 10", "Tháng 11", "Tháng 12"
+];
+
+function CalendarPicker({ selected, month, onMonthChange, onSelect, minDate }: {
+  selected: Date;
+  month: Date;
+  onMonthChange: (d: Date) => void;
+  onSelect: (d: Date) => void;
+  minDate?: Date;
+}) {
+  const year = month.getFullYear();
+  const monthIdx = month.getMonth();
+  const firstDay = new Date(year, monthIdx, 1);
+  const lastDay = new Date(year, monthIdx + 1, 0);
+  const startWeekday = firstDay.getDay();
+  const daysInMonth = lastDay.getDate();
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  // Build grid (max 6 weeks × 7 days = 42 cells)
+  const cells: (Date | null)[] = [];
+  for (let i = 0; i < startWeekday; i++) cells.push(null);
+  for (let d = 1; d <= daysInMonth; d++) {
+    cells.push(new Date(year, monthIdx, d));
+  }
+  while (cells.length % 7 !== 0) cells.push(null);
+
+  function prevMonth() {
+    onMonthChange(new Date(year, monthIdx - 1, 1));
+  }
+  function nextMonth() {
+    onMonthChange(new Date(year, monthIdx + 1, 1));
+  }
+  function jumpToYear(y: number) {
+    onMonthChange(new Date(y, monthIdx, 1));
+  }
+  function jumpToMonth(m: number) {
+    onMonthChange(new Date(year, m, 1));
+  }
+
+  const minTs = minDate ? minDate.getTime() : -Infinity;
+  const yearOptions: number[] = [];
+  for (let y = today.getFullYear(); y <= today.getFullYear() + 2; y++) yearOptions.push(y);
+
+  return (
+    <div className="bg-secondary/40 rounded-2xl p-4 border border-border">
+      {/* Month/Year navigation with selectors */}
+      <div className="flex items-center justify-between gap-2 mb-3">
+        <button
+          type="button"
+          onClick={prevMonth}
+          className="p-2 rounded-xl hover:bg-background transition-colors"
+          aria-label="Tháng trước"
+        >
+          <ChevronLeft className="w-5 h-5" />
+        </button>
+
+        <div className="flex items-center gap-2 flex-1 justify-center">
+          <CalendarDays className="w-4 h-4 text-primary" />
+          <select
+            value={monthIdx}
+            onChange={(e) => jumpToMonth(parseInt(e.target.value))}
+            className="px-2 py-1 rounded-lg bg-background border border-input text-sm font-semibold cursor-pointer hover:border-primary outline-none"
+          >
+            {VN_MONTHS.map((m, i) => (
+              <option key={i} value={i}>{m}</option>
+            ))}
+          </select>
+          <select
+            value={year}
+            onChange={(e) => jumpToYear(parseInt(e.target.value))}
+            className="px-2 py-1 rounded-lg bg-background border border-input text-sm font-semibold cursor-pointer hover:border-primary outline-none"
+          >
+            {yearOptions.map((y) => (
+              <option key={y} value={y}>{y}</option>
+            ))}
+          </select>
+        </div>
+
+        <button
+          type="button"
+          onClick={nextMonth}
+          className="p-2 rounded-xl hover:bg-background transition-colors"
+          aria-label="Tháng sau"
+        >
+          <ChevronRight className="w-5 h-5" />
+        </button>
+      </div>
+
+      {/* Weekday header */}
+      <div className="grid grid-cols-7 gap-1 mb-1">
+        {VN_DAYS.map((d, i) => (
+          <div key={i} className={`text-center text-xs font-bold py-1 ${i === 0 ? "text-destructive" : "text-muted-foreground"}`}>
+            {d}
+          </div>
+        ))}
+      </div>
+
+      {/* Days grid */}
+      <div className="grid grid-cols-7 gap-1">
+        {cells.map((d, i) => {
+          if (!d) return <div key={i} />;
+          const isSel = sameDay(d, selected);
+          const isToday_ = sameDay(d, today);
+          const isPast = d.getTime() < minTs;
+          const isSunday = d.getDay() === 0;
+
+          return (
+            <button
+              key={i}
+              type="button"
+              disabled={isPast}
+              onClick={() => onSelect(d)}
+              className={`aspect-square rounded-xl flex items-center justify-center text-sm font-medium transition-all relative ${
+                isSel
+                  ? "bg-primary text-primary-foreground shadow-lg shadow-primary/30 scale-105"
+                  : isPast
+                    ? "text-muted-foreground/30 cursor-not-allowed"
+                    : isToday_
+                      ? "bg-accent/20 text-accent-foreground hover:bg-accent/30 ring-2 ring-accent"
+                      : isSunday
+                        ? "text-destructive hover:bg-destructive/10"
+                        : "text-foreground hover:bg-background"
+              }`}
+            >
+              {d.getDate()}
+              {isToday_ && !isSel && (
+                <span className="absolute bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-accent" />
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Selected date summary */}
+      <div className="mt-3 pt-3 border-t border-border text-center">
+        <div className="text-xs text-muted-foreground">Đã chọn</div>
+        <div className="text-sm font-bold text-foreground">
+          {VN_DAYS[selected.getDay()] === "CN" ? "Chủ nhật" : `Thứ ${(selected.getDay() + 1)}`},{" "}
+          {selected.getDate()} {VN_MONTHS[selected.getMonth()]} {selected.getFullYear()}
+        </div>
+      </div>
+    </div>
   );
 }
