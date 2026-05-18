@@ -46,7 +46,8 @@ class PaymentMethod(str, Enum):
 class PaymentStatus(str, Enum):
     CHUA_THANH_TOAN = "CHUA_THANH_TOAN"
     DA_THANH_TOAN = "DA_THANH_TOAN"
-    HOAN_TIEN = "HOAN_TIEN"
+    CHO_HOAN_TIEN = "CHO_HOAN_TIEN"  # Booking đã hủy, đang chờ staff xác nhận hoàn tiền
+    HOAN_TIEN = "HOAN_TIEN"  # Đã hoàn tiền xong
 
 
 class MembershipType(str, Enum):

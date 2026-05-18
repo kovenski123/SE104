@@ -304,9 +304,10 @@ def cancel_booking(
     # Update invoice
     if b.invoice:
         if b.invoice.trang_thai == PaymentStatus.DA_THANH_TOAN and refund_rate > 0:
-            b.invoice.trang_thai = PaymentStatus.HOAN_TIEN
+            # Đặt trạng thái CHỜ HOÀN TIỀN, staff phải confirm bằng action riêng
+            b.invoice.trang_thai = PaymentStatus.CHO_HOAN_TIEN
             refund_amount = (b.invoice.tong_cong * Decimal(str(refund_rate))).quantize(Decimal("1"))
-            b.ghi_chu = (b.ghi_chu or "") + f"\n[Hoàn {refund_amount}đ ({int(refund_rate*100)}%)] {refund_note}"
+            b.ghi_chu = (b.ghi_chu or "") + f"\n[Chờ hoàn {refund_amount}đ ({int(refund_rate*100)}%)] {refund_note}"
         elif not hoan_tien:
             b.ghi_chu = (b.ghi_chu or "") + f"\n[Không hoàn tiền] {refund_note}"
 
@@ -340,6 +341,31 @@ def complete_booking(
     if restocked:
         note = f"[AUTO-RESTOCK {datetime.now().strftime('%H:%M %d/%m/%Y')}] " + ", ".join(restocked)
         b.ghi_chu = (b.ghi_chu + "\n" + note) if b.ghi_chu else note
+    db.commit()
+    db.refresh(b)
+    return _booking_to_out(b)
+
+
+@router.post("/{booking_id}/confirm-refund", response_model=BookingOut)
+def confirm_refund(
+    booking_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_roles(UserRole.ADMIN, UserRole.QUAN_LY, UserRole.NHAN_VIEN)),
+):
+    """Staff xác nhận đã hoàn tiền cho booking đã hủy (CHO_HOAN_TIEN → HOAN_TIEN)."""
+    b = db.query(Booking).filter(Booking.id == booking_id).first()
+    if not b:
+        raise HTTPException(404, "Không tìm thấy booking")
+    if b.trang_thai != BookingStatus.HUY:
+        raise HTTPException(400, "Chỉ booking đã hủy mới có thể xác nhận hoàn tiền")
+    if not b.invoice:
+        raise HTTPException(400, "Booking không có hóa đơn")
+    if b.invoice.trang_thai != PaymentStatus.CHO_HOAN_TIEN:
+        raise HTTPException(400, f"Hóa đơn không ở trạng thái chờ hoàn tiền (hiện: {b.invoice.trang_thai})")
+
+    b.invoice.trang_thai = PaymentStatus.HOAN_TIEN
+    note = f"[XÁC NHẬN HOÀN TIỀN {datetime.now().strftime('%H:%M %d/%m/%Y')} bởi {user.ho_ten}]"
+    b.ghi_chu = (b.ghi_chu + "\n" + note) if b.ghi_chu else note
     db.commit()
     db.refresh(b)
     return _booking_to_out(b)
@@ -469,6 +495,100 @@ def get_booking_public(booking_id: int, db: Session = Depends(get_db)):
     b = db.query(Booking).filter(Booking.id == booking_id).first()
     if not b:
         raise HTTPException(404, "Không tìm thấy booking")
+    return _booking_to_out(b)
+
+
+@router.post("/{booking_id}/services", response_model=BookingOut)
+def add_booking_service(
+    booking_id: int,
+    payload: dict,  # {"dich_vu_id": int, "so_luong": int}
+    db: Session = Depends(get_db),
+    user: User = Depends(require_roles(UserRole.ADMIN, UserRole.QUAN_LY, UserRole.NHAN_VIEN)),
+):
+    """Staff thêm dịch vụ vào booking đang active (chưa HOAN_THANH/HUY)."""
+    b = db.query(Booking).filter(Booking.id == booking_id).first()
+    if not b:
+        raise HTTPException(404, "Không tìm thấy booking")
+    if b.trang_thai in (BookingStatus.HOAN_THANH, BookingStatus.HUY):
+        raise HTTPException(400, "Booking đã hoàn thành/hủy, không thể thêm dịch vụ")
+
+    dich_vu_id = payload.get("dich_vu_id")
+    so_luong = int(payload.get("so_luong", 1))
+    if not dich_vu_id or so_luong <= 0:
+        raise HTTPException(400, "Thiếu thông tin dịch vụ hoặc số lượng")
+
+    svc = db.query(Service).filter(Service.id == dich_vu_id).first()
+    if not svc:
+        raise HTTPException(404, "Không tìm thấy dịch vụ")
+    if svc.trang_thai != ServiceStatus.HOAT_DONG:
+        raise HTTPException(400, "Dịch vụ không hoạt động")
+    if svc.ton_kho < so_luong:
+        raise HTTPException(400, f"Tồn kho không đủ (còn {svc.ton_kho})")
+
+    # Nếu đã có dịch vụ này trong booking → tăng số lượng
+    existing = next((bs for bs in b.booking_services if bs.dich_vu_id == dich_vu_id), None)
+    thanh_tien = svc.don_gia * so_luong
+    if existing:
+        existing.so_luong += so_luong
+        existing.thanh_tien += thanh_tien
+    else:
+        db.add(BookingService(
+            booking_id=b.id, dich_vu_id=dich_vu_id,
+            so_luong=so_luong, don_gia=svc.don_gia, thanh_tien=thanh_tien,
+        ))
+    svc.ton_kho -= so_luong
+
+    # Update invoice tong_cong
+    if b.invoice:
+        b.invoice.tien_dich_vu = (b.invoice.tien_dich_vu or Decimal(0)) + thanh_tien
+        b.invoice.tong_cong = b.invoice.tien_san + b.invoice.tien_dich_vu - (b.invoice.giam_gia or Decimal(0))
+
+    note = f"[+DV {datetime.now().strftime('%H:%M %d/%m')}] {svc.ten_dich_vu} ×{so_luong} (+{thanh_tien:.0f}đ) bởi {user.ho_ten}"
+    b.ghi_chu = (b.ghi_chu + "\n" + note) if b.ghi_chu else note
+    db.commit()
+    db.refresh(b)
+    return _booking_to_out(b)
+
+
+@router.delete("/{booking_id}/services/{bs_id}", response_model=BookingOut)
+def remove_booking_service(
+    booking_id: int,
+    bs_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_roles(UserRole.ADMIN, UserRole.QUAN_LY, UserRole.NHAN_VIEN)),
+):
+    """Staff xóa dịch vụ khỏi booking đang active. Restock kho."""
+    b = db.query(Booking).filter(Booking.id == booking_id).first()
+    if not b:
+        raise HTTPException(404, "Không tìm thấy booking")
+    if b.trang_thai in (BookingStatus.HOAN_THANH, BookingStatus.HUY):
+        raise HTTPException(400, "Booking đã hoàn thành/hủy, không thể xóa dịch vụ")
+
+    bs = next((x for x in b.booking_services if x.id == bs_id), None)
+    if not bs:
+        raise HTTPException(404, "Không tìm thấy dịch vụ trong booking")
+
+    svc = db.query(Service).filter(Service.id == bs.dich_vu_id).first()
+    refund_amount = bs.thanh_tien
+    qty_back = bs.so_luong
+    svc_name = svc.ten_dich_vu if svc else "?"
+
+    # Restock vì booking chưa hoàn thành → trả lại kho
+    if svc:
+        svc.ton_kho += qty_back
+
+    # Update invoice
+    if b.invoice:
+        b.invoice.tien_dich_vu = (b.invoice.tien_dich_vu or Decimal(0)) - refund_amount
+        if b.invoice.tien_dich_vu < 0:
+            b.invoice.tien_dich_vu = Decimal(0)
+        b.invoice.tong_cong = b.invoice.tien_san + b.invoice.tien_dich_vu - (b.invoice.giam_gia or Decimal(0))
+
+    db.delete(bs)
+    note = f"[-DV {datetime.now().strftime('%H:%M %d/%m')}] {svc_name} ×{qty_back} (-{refund_amount:.0f}đ) bởi {user.ho_ten}"
+    b.ghi_chu = (b.ghi_chu + "\n" + note) if b.ghi_chu else note
+    db.commit()
+    db.refresh(b)
     return _booking_to_out(b)
 
 

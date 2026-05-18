@@ -199,11 +199,25 @@ function CreateShiftModal({ staff, fields, onClose, onSuccess }: any) {
 
   async function submit() {
     setLoading(true);
+    setErr("");
     try {
       await apiPost("/api/shifts", form);
       onSuccess();
     } catch (e: any) {
-      setErr(e.message);
+      if (e.status === 409 && e.detail?.code === "SHIFT_OVERLAP_DAY") {
+        // Hiện confirm dialog
+        if (confirm(`⚠️ CẢNH BÁO\n\n${e.detail.message}\n\nBạn có chắc chắn muốn phân thêm ca này không?`)) {
+          // User confirm → retry với force=true
+          try {
+            await apiPost("/api/shifts", { ...form, force: true });
+            onSuccess();
+          } catch (e2: any) {
+            setErr(e2.message);
+          }
+        }
+      } else {
+        setErr(e.message);
+      }
     } finally {
       setLoading(false);
     }

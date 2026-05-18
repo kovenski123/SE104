@@ -46,13 +46,20 @@ export async function api(path: string, options: RequestInit = {}): Promise<any>
   const body = ct.includes("application/json") ? await res.json() : await res.text();
 
   if (!res.ok) {
+    const detail =
+      typeof body === "object" && body?.detail !== undefined ? body.detail : null;
     const msg =
-      typeof body === "object" && body?.detail
-        ? typeof body.detail === "string"
-          ? body.detail
-          : JSON.stringify(body.detail)
-        : `Lỗi ${res.status}`;
-    throw new Error(msg);
+      typeof detail === "string"
+        ? detail
+        : detail && typeof detail === "object" && detail.message
+          ? detail.message
+          : detail
+            ? JSON.stringify(detail)
+            : `Lỗi ${res.status}`;
+    const err: any = new Error(msg);
+    err.status = res.status;
+    err.detail = detail;
+    throw err;
   }
   return body;
 }

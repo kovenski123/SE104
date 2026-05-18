@@ -64,14 +64,30 @@ def create_shift(
     if payload.ngay < date.today() + timedelta(days=1):
         raise HTTPException(400, "Phân ca phải lập tối thiểu 24 giờ trước")
 
-    # Không phân trùng ca trong cùng ngày
-    existing = db.query(Shift).filter(
+    # Block: trùng đúng ca trong ngày (Sáng & Sáng) — không bao giờ cho phép
+    exact_dup = db.query(Shift).filter(
         Shift.nhan_vien_id == payload.nhan_vien_id,
         Shift.ngay == payload.ngay,
         Shift.ca_truc == payload.ca_truc,
     ).first()
-    if existing:
-        raise HTTPException(400, "Nhân viên đã có ca này trong ngày")
+    if exact_dup:
+        raise HTTPException(400, f"Nhân viên đã có ca {payload.ca_truc.value} trong ngày này")
+
+    # Warn: đã có ca khác trong cùng ngày → cần force=True để confirm
+    existing_today = db.query(Shift).filter(
+        Shift.nhan_vien_id == payload.nhan_vien_id,
+        Shift.ngay == payload.ngay,
+    ).all()
+    if existing_today and not payload.force:
+        ca_list = ", ".join(s.ca_truc.value for s in existing_today)
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "SHIFT_OVERLAP_DAY",
+                "message": f"{nv.ho_ten} đã có ca {ca_list} trong ngày {payload.ngay.strftime('%d/%m/%Y')}. Phân thêm có thể gây quá tải.",
+                "existing_shifts": [{"ca_truc": s.ca_truc.value, "id": s.id} for s in existing_today],
+            },
+        )
 
     san_str = ",".join(str(i) for i in (payload.san_phu_trach or []))
     shift = Shift(

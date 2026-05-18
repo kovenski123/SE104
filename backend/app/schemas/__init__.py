@@ -243,6 +243,7 @@ class ShiftCreate(BaseModel):
     ca_truc: ShiftType
     san_phu_trach: Optional[List[int]] = []
     ghi_chu: Optional[str] = None
+    force: Optional[bool] = False  # Bỏ qua warning trùng ca trong ngày
 
 
 class ShiftOut(BaseModel):

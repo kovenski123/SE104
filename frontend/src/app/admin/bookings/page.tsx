@@ -2,10 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { apiGet, apiPost, formatVND, formatDate } from "@/lib/api";
+import { apiGet, apiPost, apiDelete, formatVND, formatDate } from "@/lib/api";
 import {
   Loader2, CheckCircle2, DollarSign, Search, X, Calendar,
-  Filter, Clock, XCircle, RotateCcw, Ban
+  Filter, Clock, XCircle, RotateCcw, Ban, Package, Plus, Trash2, Minus
 } from "lucide-react";
 
 const STATUS_LABEL: Record<string, { text: string; cls: string }> = {
@@ -18,6 +18,7 @@ const STATUS_LABEL: Record<string, { text: string; cls: string }> = {
 
 export default function BookingsAdmin() {
   const [list, setList] = useState<any[]>([]);
+  const [invoices, setInvoices] = useState<Record<number, any>>({});  // booking_id → invoice
   const [filter, setFilter] = useState<string>("");
   const [keyword, setKeyword] = useState<string>("");
   const [keywordInput, setKeywordInput] = useState<string>("");
@@ -25,6 +26,7 @@ export default function BookingsAdmin() {
   const [denNgay, setDenNgay] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [cancelTarget, setCancelTarget] = useState<any>(null);
+  const [serviceTarget, setServiceTarget] = useState<any>(null);
 
   async function load() {
     setLoading(true);
@@ -34,8 +36,14 @@ export default function BookingsAdmin() {
       if (keyword.trim()) p.set("keyword", keyword.trim());
       if (tuNgay) p.set("tu_ngay", tuNgay);
       if (denNgay) p.set("den_ngay", denNgay);
-      const r = await apiGet(`/api/bookings?${p}`);
-      setList(r);
+      const [bookings, invs] = await Promise.all([
+        apiGet(`/api/bookings?${p}`),
+        apiGet(`/api/invoices`).catch(() => []),
+      ]);
+      setList(bookings);
+      const invMap: Record<number, any> = {};
+      for (const inv of invs) invMap[inv.booking_id] = inv;
+      setInvoices(invMap);
     } finally { setLoading(false); }
   }
 
@@ -43,6 +51,14 @@ export default function BookingsAdmin() {
 
   function applySearch(e: React.FormEvent) { e.preventDefault(); setKeyword(keywordInput); }
   function resetFilters() { setKeywordInput(""); setKeyword(""); setFilter(""); setTuNgay(""); setDenNgay(""); }
+
+  async function confirmRefund(id: number) {
+    if (!confirm("Xác nhận đã hoàn tiền cho booking này?\nHành động không thể hoàn tác.")) return;
+    try {
+      await apiPost(`/api/bookings/${id}/confirm-refund`);
+      load();
+    } catch (e: any) { alert(e.message); }
+  }
 
   async function markComplete(id: number) {
     if (!confirm("Đánh dấu booking này đã hoàn thành?\nĐồ thuê sẽ tự restock vào kho.")) return;
@@ -52,8 +68,7 @@ export default function BookingsAdmin() {
 
   async function payInvoice(bookingId: number) {
     try {
-      const invoices = await apiGet(`/api/invoices`);
-      const inv = invoices.find((i: any) => i.booking_id === bookingId);
+      const inv = invoices[bookingId];
       if (!inv) { alert("Không tìm thấy hóa đơn"); return; }
       if (inv.trang_thai === "DA_THANH_TOAN") { alert("Hóa đơn đã thanh toán"); return; }
       if (!confirm(`Xác nhận thu ${formatVND(inv.tong_cong)}?`)) return;
@@ -164,22 +179,37 @@ export default function BookingsAdmin() {
                         <span className={`inline-flex px-3 py-1 rounded-full text-xs font-semibold border ${st?.cls}`}>{st?.text}</span>
                       </td>
                       <td className="p-4 text-center">
-                        {b.trang_thai === "HUY" ? (
-                          b.hoan_tien ? (
-                            <span className="inline-flex items-center gap-1 text-xs font-bold px-2 py-1 rounded-full bg-chart-3/20 text-chart-3 border border-chart-3/30">
-                              <RotateCcw className="w-3 h-3" /> Đã hoàn
-                            </span>
-                          ) : (
+                        {(() => {
+                          const inv = invoices[b.id];
+                          if (b.trang_thai !== "HUY") return <span className="text-xs text-muted-foreground">—</span>;
+                          if (inv?.trang_thai === "CHO_HOAN_TIEN") {
+                            return (
+                              <span className="inline-flex items-center gap-1 text-xs font-bold px-2 py-1 rounded-full bg-accent/20 text-accent border border-accent/30">
+                                <Clock className="w-3 h-3" /> Chờ hoàn tiền
+                              </span>
+                            );
+                          }
+                          if (inv?.trang_thai === "HOAN_TIEN") {
+                            return (
+                              <span className="inline-flex items-center gap-1 text-xs font-bold px-2 py-1 rounded-full bg-chart-3/20 text-chart-3 border border-chart-3/30">
+                                <RotateCcw className="w-3 h-3" /> Đã hoàn
+                              </span>
+                            );
+                          }
+                          return (
                             <span className="inline-flex items-center gap-1 text-xs font-bold px-2 py-1 rounded-full bg-muted text-muted-foreground border border-border">
                               <Ban className="w-3 h-3" /> Không hoàn
                             </span>
-                          )
-                        ) : <span className="text-xs text-muted-foreground">—</span>}
+                          );
+                        })()}
                       </td>
                       <td className="p-4">
                         <div className="flex items-center justify-end gap-2">
                           {["CHO_XAC_NHAN", "DA_XAC_NHAN"].includes(b.trang_thai) && (
                             <>
+                              <button onClick={() => setServiceTarget(b)} className="p-2 rounded-xl hover:bg-accent/10 text-accent transition-colors" title="Quản lý dịch vụ">
+                                <Package className="w-5 h-5" />
+                              </button>
                               <button onClick={() => payInvoice(b.id)} className="p-2 rounded-xl hover:bg-chart-3/10 text-chart-3 transition-colors" title="Thu tiền">
                                 <DollarSign className="w-5 h-5" />
                               </button>
@@ -191,6 +221,13 @@ export default function BookingsAdmin() {
                           {b.trang_thai === "DA_XAC_NHAN" && (
                             <button onClick={() => markComplete(b.id)} className="p-2 rounded-xl hover:bg-primary/10 text-primary transition-colors" title="Hoàn thành">
                               <CheckCircle2 className="w-5 h-5" />
+                            </button>
+                          )}
+                          {invoices[b.id]?.trang_thai === "CHO_HOAN_TIEN" && (
+                            <button onClick={() => confirmRefund(b.id)}
+                              className="px-3 py-2 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-semibold transition-colors flex items-center gap-1 whitespace-nowrap"
+                              title="Xác nhận đã hoàn tiền">
+                              <RotateCcw className="w-3.5 h-3.5" /> Xác nhận hoàn
                             </button>
                           )}
                         </div>
@@ -214,6 +251,10 @@ export default function BookingsAdmin() {
 
       {cancelTarget && (
         <CancelBookingModal booking={cancelTarget} onClose={() => setCancelTarget(null)} onSuccess={() => { setCancelTarget(null); load(); }} />
+      )}
+
+      {serviceTarget && (
+        <ServicesManagerModal booking={serviceTarget} onClose={() => setServiceTarget(null)} onChanged={() => load()} />
       )}
     </div>
   );
@@ -292,6 +333,132 @@ function CancelBookingModal({ booking, onClose, onSuccess }: any) {
             <button onClick={submit} disabled={loading} className="flex-1 py-3 rounded-2xl bg-destructive hover:bg-destructive/90 text-destructive-foreground font-semibold disabled:opacity-50 text-sm transition-colors">
               {loading ? "Đang hủy..." : "Xác nhận hủy"}
             </button>
+          </div>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+}
+
+function ServicesManagerModal({ booking, onClose, onChanged }: any) {
+  const [services, setServices] = useState<any[]>([]);  // all services
+  const [current, setCurrent] = useState<any[]>(booking.services || []);  // booking_services
+  const [selectedSvc, setSelectedSvc] = useState<number>(0);
+  const [qty, setQty] = useState(1);
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState("");
+
+  useEffect(() => {
+    apiGet("/api/services?trang_thai=HOAT_DONG").then((r) => {
+      setServices(r);
+      if (r.length > 0) setSelectedSvc(r[0].id);
+    });
+  }, []);
+
+  async function reload() {
+    const updated = await apiGet(`/api/bookings/${booking.id}`);
+    setCurrent(updated.services || []);
+    onChanged();
+  }
+
+  async function addSvc() {
+    if (!selectedSvc) return;
+    setLoading(true); setErr("");
+    try {
+      await apiPost(`/api/bookings/${booking.id}/services`, { dich_vu_id: selectedSvc, so_luong: qty });
+      setQty(1);
+      await reload();
+    } catch (e: any) { setErr(e.message); }
+    finally { setLoading(false); }
+  }
+
+  async function removeSvc(bsId: number) {
+    if (!confirm("Xóa dịch vụ này khỏi booking?")) return;
+    setLoading(true); setErr("");
+    try {
+      await apiDelete(`/api/bookings/${booking.id}/services/${bsId}`);
+      await reload();
+    } catch (e: any) { setErr(e.message); }
+    finally { setLoading(false); }
+  }
+
+  const totalSvc = current.reduce((s, x) => s + parseFloat(x.thanh_tien), 0);
+
+  return (
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+      <motion.div initial={{ scale: 0.95 }} animate={{ scale: 1 }} className="bg-card rounded-3xl w-full max-w-lg my-8 shadow-2xl border border-border">
+        <div className="flex items-center justify-between p-5 border-b border-border">
+          <div>
+            <h3 className="text-2xl font-display font-bold">Quản lý dịch vụ</h3>
+            <p className="text-xs text-muted-foreground mt-0.5">{booking.ma_dat_san} · {booking.ten_san}</p>
+          </div>
+          <button onClick={onClose} className="p-2 hover:bg-secondary rounded-xl"><X className="w-5 h-5" /></button>
+        </div>
+
+        <div className="p-5 space-y-4">
+          {/* Existing services */}
+          <div>
+            <div className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">Dịch vụ hiện có ({current.length})</div>
+            {current.length === 0 ? (
+              <div className="p-6 text-center text-sm text-muted-foreground bg-secondary/30 rounded-2xl border border-dashed border-border">
+                Chưa có dịch vụ nào
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {current.map((bs: any) => (
+                  <div key={bs.id} className="flex items-center justify-between p-3 rounded-xl bg-secondary/50 border border-border">
+                    <div className="flex-1 min-w-0">
+                      <div className="font-semibold text-sm text-foreground">{bs.ten_dich_vu}</div>
+                      <div className="text-xs text-muted-foreground">
+                        ×{bs.so_luong} · {formatVND(bs.don_gia)} = <strong className="text-primary">{formatVND(bs.thanh_tien)}</strong>
+                      </div>
+                    </div>
+                    <button onClick={() => removeSvc(bs.id)} disabled={loading}
+                      className="p-2 rounded-xl hover:bg-destructive/10 text-destructive transition-colors disabled:opacity-50">
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
+                <div className="flex justify-between text-sm pt-2 border-t border-border">
+                  <span className="text-muted-foreground">Tổng dịch vụ:</span>
+                  <strong className="text-primary">{formatVND(totalSvc)}</strong>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Add new service */}
+          <div className="pt-4 border-t border-border">
+            <div className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">Thêm dịch vụ</div>
+            <div className="flex gap-2">
+              <select value={selectedSvc} onChange={(e) => setSelectedSvc(parseInt(e.target.value))}
+                className="flex-1 px-3 py-2.5 rounded-xl border border-input bg-background focus:border-primary outline-none text-sm">
+                {services.map((s) => (
+                  <option key={s.id} value={s.id} disabled={s.ton_kho <= 0}>
+                    {s.ten_dich_vu} ({formatVND(s.don_gia)}) — Còn {s.ton_kho}
+                  </option>
+                ))}
+              </select>
+              <div className="flex items-center gap-1 bg-secondary rounded-xl">
+                <button onClick={() => setQty(Math.max(1, qty - 1))} className="p-2.5 hover:bg-background rounded-l-xl">
+                  <Minus className="w-3 h-3" />
+                </button>
+                <span className="px-2 font-bold w-8 text-center text-sm">{qty}</span>
+                <button onClick={() => setQty(qty + 1)} className="p-2.5 hover:bg-background rounded-r-xl">
+                  <Plus className="w-3 h-3" />
+                </button>
+              </div>
+              <button onClick={addSvc} disabled={loading || !selectedSvc}
+                className="px-4 py-2.5 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground text-sm font-semibold disabled:opacity-50 transition-colors flex items-center gap-1">
+                <Plus className="w-4 h-4" /> Thêm
+              </button>
+            </div>
+          </div>
+
+          {err && <div className="p-3 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive text-sm">{err}</div>}
+
+          <div className="flex justify-end pt-2">
+            <button onClick={onClose} className="px-5 py-2.5 rounded-xl border border-border hover:bg-secondary font-semibold text-sm">Đóng</button>
           </div>
         </div>
       </motion.div>

@@ -16,6 +16,7 @@ const STATUS_LABEL: Record<string, { text: string; cls: string }> = {
 export default function MyBookingsPage() {
   const router = useRouter();
   const [bookings, setBookings] = useState<any[]>([]);
+  const [feedbackByBooking, setFeedbackByBooking] = useState<Record<number, any>>({});
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<string>("");
   const [cancelTarget, setCancelTarget] = useState<any>(null);
@@ -24,9 +25,23 @@ export default function MyBookingsPage() {
   async function load() {
     setLoading(true);
     try {
-      const params = filter ? `?trang_thai=${filter}` : "";
-      const r = await apiGet(`/api/bookings${params}`);
-      setBookings(r);
+      const u = getUser();
+      const params = new URLSearchParams();
+      if (filter) params.set("trang_thai", filter);
+      if (u && ["ADMIN", "QUAN_LY", "NHAN_VIEN"].includes(u.vai_tro)) {
+        params.set("khach_hang_id", String(u.id));
+      }
+      const [bookingList, feedbacks] = await Promise.all([
+        apiGet(`/api/bookings?${params}`),
+        apiGet("/api/feedbacks").catch(() => []),
+      ]);
+      setBookings(bookingList);
+      // Map booking_id → feedback
+      const fbMap: Record<number, any> = {};
+      for (const f of feedbacks || []) {
+        if (f.booking_id) fbMap[f.booking_id] = f;
+      }
+      setFeedbackByBooking(fbMap);
     } catch (e: any) {
       if (e.message.includes("401") || e.message.includes("xác thực")) {
         router.push("/login");
@@ -82,6 +97,7 @@ export default function MyBookingsPage() {
           <div className="space-y-3">
             {bookings.map((b) => (
               <BookingCard key={b.id} b={b}
+                feedback={feedbackByBooking[b.id]}
                 onCancel={() => setCancelTarget(b)}
                 onFeedback={() => setFeedbackTarget(b)} />
             ))}
@@ -101,62 +117,88 @@ export default function MyBookingsPage() {
   );
 }
 
-function BookingCard({ b, onCancel, onFeedback }: any) {
+function BookingCard({ b, feedback, onCancel, onFeedback }: any) {
   const st = STATUS_LABEL[b.trang_thai];
   const canCancel = ["CHO_XAC_NHAN", "DA_XAC_NHAN"].includes(b.trang_thai);
-  const canFeedback = b.trang_thai === "HOAN_THANH";
+  const canFeedback = b.trang_thai === "HOAN_THANH" && !feedback;
   const hoursUntil = (new Date(`${b.ngay_dat}T${b.gio_bat_dau}`).getTime() - Date.now()) / 3600000;
 
   return (
-    <div className="bg-white rounded-2xl border border-ink-900/5 p-5 hover:shadow-md transition">
+    <div className="bg-card rounded-2xl border border-border p-5 hover:shadow-md transition">
       <div className="flex flex-wrap items-start justify-between gap-3 mb-3">
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <span className="font-mono text-xs text-ink-400">{b.ma_dat_san}</span>
+            <span className="font-mono text-xs text-muted-foreground">{b.ma_dat_san}</span>
             <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${st?.cls}`}>{st?.text}</span>
           </div>
-          <h3 className="font-display text-2xl">{b.ten_san}</h3>
+          <h3 className="text-2xl font-display font-bold text-foreground">{b.ten_san}</h3>
         </div>
         <div className="text-right">
-          <div className="font-display text-2xl text-brand-700">{formatVND(b.tien_san)}</div>
-          <div className="text-xs text-ink-400">{b.hinh_thuc_thanh_toan === "TIEN_MAT" ? "Tiền mặt" : "Chuyển khoản"}</div>
+          <div className="text-2xl font-display font-bold text-primary">{formatVND(b.tien_san)}</div>
+          <div className="text-xs text-muted-foreground">{b.hinh_thuc_thanh_toan === "TIEN_MAT" ? "Tiền mặt" : "Chuyển khoản"}</div>
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-4 text-sm text-ink-400 mb-3">
+      <div className="flex flex-wrap gap-4 text-sm text-muted-foreground mb-3">
         <span className="flex items-center gap-1"><Calendar size={14} /> {formatDate(b.ngay_dat)}</span>
         <span className="flex items-center gap-1"><Clock size={14} /> {b.gio_bat_dau.slice(0, 5)} - {b.gio_ket_thuc.slice(0, 5)} ({b.so_gio}h)</span>
         {b.services?.length > 0 && (
-          <span className="flex items-center gap-1">
-            🛍️ {b.services.length} dịch vụ
-          </span>
+          <span className="flex items-center gap-1">🛍️ {b.services.length} dịch vụ</span>
         )}
       </div>
 
       {b.services?.length > 0 && (
-        <div className="text-xs text-ink-400 mb-3 pl-1">
+        <div className="text-xs text-muted-foreground mb-3 pl-1">
           {b.services.map((s: any) => `${s.ten_dich_vu} ×${s.so_luong}`).join(" • ")}
         </div>
       )}
 
       {b.ly_do_huy && (
-        <div className="mb-3 p-2 rounded-lg bg-red-50 border border-red-200 text-xs text-red-700">
+        <div className="mb-3 p-3 rounded-xl bg-destructive/10 border border-destructive/20 text-xs text-destructive">
           <strong>Lý do hủy:</strong> {b.ly_do_huy}
         </div>
       )}
 
+      {/* Submitted feedback inline */}
+      {feedback && (
+        <div className="mt-3 pt-3 border-t border-border">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <Star className="w-4 h-4 fill-accent text-accent" />
+              <span className="text-xs font-bold text-foreground">Bạn đã đánh giá</span>
+              <div className="flex gap-0.5">
+                {[1, 2, 3, 4, 5].map((n) => (
+                  <Star key={n} className={`w-3 h-3 ${n <= feedback.danh_gia_tong ? "fill-accent text-accent" : "text-muted-foreground/30"}`} />
+                ))}
+              </div>
+            </div>
+            <span className="text-xs text-muted-foreground">{new Date(feedback.ngay_tao).toLocaleDateString("vi-VN")}</span>
+          </div>
+          {feedback.nhan_xet && (
+            <p className="text-sm italic text-foreground bg-secondary/40 rounded-xl p-3">"{feedback.nhan_xet}"</p>
+          )}
+          <div className="flex flex-wrap gap-2 text-xs text-muted-foreground mt-2">
+            <span>Cơ sở: <strong className="text-foreground">{feedback.danh_gia_co_so}/5</strong></span>
+            <span>·</span>
+            <span>Nhân viên: <strong className="text-foreground">{feedback.danh_gia_nhan_vien}/5</strong></span>
+            <span>·</span>
+            <span>Dịch vụ: <strong className="text-foreground">{feedback.danh_gia_dich_vu}/5</strong></span>
+          </div>
+        </div>
+      )}
+
       {(canCancel || canFeedback) && (
-        <div className="flex gap-2 pt-3 border-t border-ink-900/5">
+        <div className="flex gap-2 pt-3 border-t border-border">
           {canCancel && (
             <button onClick={onCancel}
-              className="px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-50 rounded-lg transition">
+              className="px-4 py-2 text-sm font-semibold text-destructive hover:bg-destructive/10 rounded-lg transition">
               <X size={14} className="inline mr-1" />
               Hủy lịch {hoursUntil >= 24 ? "(hoàn 50%)" : "(không hoàn tiền)"}
             </button>
           )}
           {canFeedback && (
             <button onClick={onFeedback}
-              className="px-4 py-2 text-sm font-semibold bg-brand-50 text-brand-700 hover:bg-brand-100 rounded-lg transition">
+              className="px-4 py-2 text-sm font-semibold bg-primary/10 text-primary hover:bg-primary/20 rounded-lg transition">
               <Star size={14} className="inline mr-1" />
               Đánh giá
             </button>
