@@ -174,7 +174,12 @@ export default function BookingsAdmin() {
                           <span>{b.gio_bat_dau?.slice(0, 5)} - {b.gio_ket_thuc?.slice(0, 5)}</span>
                         </div>
                       </td>
-                      <td className="p-4 text-right"><span className="font-semibold text-foreground">{formatVND(b.tien_san)}</span></td>
+                      <td className="p-4 text-right">
+                        <div className="font-semibold text-foreground">{formatVND(b.invoice?.tong_cong || b.tien_san)}</div>
+                        {b.invoice && parseFloat(b.invoice.tien_dich_vu) > 0 && (
+                          <div className="text-xs text-muted-foreground">+ DV {formatVND(b.invoice.tien_dich_vu)}</div>
+                        )}
+                      </td>
                       <td className="p-4 text-center">
                         <span className={`inline-flex px-3 py-1 rounded-full text-xs font-semibold border ${st?.cls}`}>{st?.text}</span>
                       </td>
@@ -341,24 +346,27 @@ function CancelBookingModal({ booking, onClose, onSuccess }: any) {
 }
 
 function ServicesManagerModal({ booking, onClose, onChanged }: any) {
-  const [services, setServices] = useState<any[]>([]);  // all services
-  const [current, setCurrent] = useState<any[]>(booking.services || []);  // booking_services
+  const [services, setServices] = useState<any[]>([]);  // all services (for stock)
+  const [current, setCurrent] = useState<any[]>(booking.services || []);
+  const [invoice, setInvoice] = useState<any>(booking.invoice || null);
   const [selectedSvc, setSelectedSvc] = useState<number>(0);
   const [qty, setQty] = useState(1);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
 
-  useEffect(() => {
-    apiGet("/api/services?trang_thai=HOAT_DONG").then((r) => {
-      setServices(r);
-      if (r.length > 0) setSelectedSvc(r[0].id);
-    });
-  }, []);
+  async function loadServices() {
+    const r = await apiGet("/api/services?trang_thai=HOAT_DONG");
+    setServices(r);
+    if (!selectedSvc && r.length > 0) setSelectedSvc(r[0].id);
+  }
+  useEffect(() => { loadServices(); }, []);
 
   async function reload() {
     const updated = await apiGet(`/api/bookings/${booking.id}`);
     setCurrent(updated.services || []);
-    onChanged();
+    setInvoice(updated.invoice || null);
+    await loadServices(); // refresh stock counts
+    onChanged(); // tell parent to refresh table
   }
 
   async function addSvc() {
@@ -457,11 +465,40 @@ function ServicesManagerModal({ booking, onClose, onChanged }: any) {
 
           {err && <div className="p-3 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive text-sm">{err}</div>}
 
+          {/* Live Total Summary — sync với invoice mỗi lần add/remove */}
+          {invoice && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+              className="p-4 rounded-2xl bg-gradient-to-br from-primary/5 to-accent/5 border border-primary/20 space-y-2">
+              <div className="text-xs font-bold text-primary uppercase tracking-wider mb-2">Tổng hóa đơn (cập nhật theo thời gian thực)</div>
+              <PriceRow label="Tiền sân" value={invoice.tien_san} />
+              <PriceRow label="Dịch vụ" value={invoice.tien_dich_vu} />
+              {parseFloat(invoice.giam_gia) > 0 && (
+                <PriceRow label="Giảm giá thẻ" value={`-${formatVND(invoice.giam_gia)}`} color="text-primary" isRaw />
+              )}
+              <motion.div key={invoice.tong_cong} initial={{ scale: 1.05 }} animate={{ scale: 1 }}
+                className="flex justify-between pt-2 border-t border-primary/20">
+                <span className="font-bold text-foreground">Tổng cộng:</span>
+                <span className="text-xl font-display font-bold text-primary">{formatVND(invoice.tong_cong)}</span>
+              </motion.div>
+            </motion.div>
+          )}
+
           <div className="flex justify-end pt-2">
             <button onClick={onClose} className="px-5 py-2.5 rounded-xl border border-border hover:bg-secondary font-semibold text-sm">Đóng</button>
           </div>
         </div>
       </motion.div>
+    </motion.div>
+  );
+}
+
+function PriceRow({ label, value, color, isRaw }: any) {
+  return (
+    <motion.div key={String(value)} initial={{ opacity: 0.5 }} animate={{ opacity: 1 }} className="flex justify-between text-sm">
+      <span className="text-muted-foreground">{label}:</span>
+      <span className={`font-semibold ${color || "text-foreground"}`}>
+        {isRaw ? value : formatVND(value)}
+      </span>
     </motion.div>
   );
 }

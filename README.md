@@ -14,11 +14,13 @@ Website cho phép khách hàng đặt sân online 24/7, đồng thời cung cấ
 
 | Lớp | Công nghệ |
 |---|---|
-| **Backend** | FastAPI 0.115 + SQLAlchemy 2.0 + SQLite + JWT |
-| **Frontend** | Next.js 14 (App Router) + TypeScript + TailwindCSS |
+| **Backend** | FastAPI 0.115 + SQLAlchemy 2.0 + JWT |
+| **Database** | SQLite (dev) / **MySQL** (production) |
+| **Frontend** | Next.js 14 (App Router) + TypeScript + TailwindCSS v4 |
+| **UI** | KICKOFF theme — Emerald Green + Inter + Space Grotesk |
+| **Animation** | Framer Motion |
 | **Biểu đồ** | Recharts |
 | **Icon** | Lucide React |
-| **Font** | Bebas Neue + Plus Jakarta Sans |
 
 ## 📁 Cấu trúc dự án
 
@@ -90,6 +92,48 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
 Backend chạy tại: **http://localhost:8000**
 Tài liệu API tự động (Swagger UI): **http://localhost:8000/docs**
+
+### 🗄️ Database: SQLite (mặc định) hay MySQL?
+
+**SQLite** — mặc định, **không cần cấu hình gì**. Phù hợp dev/demo/đồ án.
+**MySQL** — production-ready, hỗ trợ concurrency cao hơn.
+
+#### Chuyển sang MySQL
+
+1) **Cài MySQL server + tạo database:**
+
+```sql
+CREATE DATABASE san_bong CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE USER 'sanbong'@'localhost' IDENTIFIED BY 'your_password';
+GRANT ALL PRIVILEGES ON san_bong.* TO 'sanbong'@'localhost';
+FLUSH PRIVILEGES;
+```
+
+2) **Set `DATABASE_URL` trong `backend/.env`:**
+
+```bash
+cp .env.example .env
+# Sửa file .env:
+DATABASE_URL=mysql+pymysql://sanbong:your_password@localhost:3306/san_bong
+```
+
+3) **Khởi tạo schema:**
+
+```bash
+# Option A: Tự động qua SQLAlchemy
+python init_db.py
+
+# Option B: Manual SQL (kiểm soát chi tiết hơn)
+mysql -u sanbong -p san_bong < schema.sql
+```
+
+4) **Seed data demo:**
+
+```bash
+python seed.py
+```
+
+Driver `pymysql` đã có sẵn trong `requirements.txt`. Schema gồm 9 bảng: `users`, `fields`, `services`, `bookings`, `booking_services`, `invoices` (track refund status), `memberships`, `shifts`, `feedbacks`. Refund flow track qua `invoices.trang_thai` với 4 trạng thái: `CHUA_THANH_TOAN`, `DA_THANH_TOAN`, `CHO_HOAN_TIEN` (Pending Refund), `HOAN_TIEN` (Refunded).
 
 ### 2) Cài & chạy Frontend
 

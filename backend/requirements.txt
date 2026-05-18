@@ -8,3 +8,6 @@ bcrypt==4.2.0
 python-multipart==0.0.12
 email-validator==2.2.0
 python-dotenv==1.0.1
+# MySQL driver — bỏ comment dòng dưới nếu dùng MySQL (đã include trong default install)
+pymysql==1.1.1
+cryptography==43.0.3

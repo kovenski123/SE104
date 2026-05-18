@@ -139,6 +139,30 @@ class BookingServiceOut(BaseModel):
         from_attributes = True
 
 
+class InvoiceSummary(BaseModel):
+    id: int
+    tien_san: Decimal
+    tien_dich_vu: Decimal
+    giam_gia: Decimal
+    tong_cong: Decimal
+    trang_thai: PaymentStatus
+
+    class Config:
+        from_attributes = True
+
+
+class InvoiceSummary(BaseModel):
+    id: int
+    tien_san: Decimal
+    tien_dich_vu: Decimal
+    giam_gia: Decimal
+    tong_cong: Decimal
+    trang_thai: PaymentStatus
+
+    class Config:
+        from_attributes = True
+
+
 class BookingOut(BaseModel):
     id: int
     ma_dat_san: str
@@ -159,6 +183,7 @@ class BookingOut(BaseModel):
     hoan_tien: bool = False
     ngay_tao: datetime
     services: List[BookingServiceOut] = []
+    invoice: Optional[InvoiceSummary] = None
 
     class Config:
         from_attributes = True

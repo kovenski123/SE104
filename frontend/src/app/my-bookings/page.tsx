@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Navbar from "@/components/Navbar";
 import { apiGet, apiPost, formatVND, formatDate, getUser } from "@/lib/api";
-import { Calendar, Clock, MapPin, X, Star, AlertCircle, Loader2 } from "lucide-react";
+import { Calendar, Clock, MapPin, X, Star, AlertCircle, Loader2, RotateCcw, Ban, CheckCircle2 } from "lucide-react";
 
 const STATUS_LABEL: Record<string, { text: string; cls: string }> = {
   CHO_XAC_NHAN: { text: "Chờ xác nhận", cls: "bg-amber-100 text-amber-800 border-amber-200" },
@@ -117,6 +117,61 @@ export default function MyBookingsPage() {
   );
 }
 
+function RefundStatusBox({ booking }: { booking: any }) {
+  // Determine refund state from invoice + hoan_tien flag
+  const invStatus = booking.invoice?.trang_thai;
+  let state: "no_refund" | "pending" | "refunded";
+  let title: string;
+  let detail: string;
+  let icon: React.ReactNode;
+  let cls: string;
+
+  if (invStatus === "CHO_HOAN_TIEN") {
+    state = "pending";
+    title = "Đang chờ hoàn tiền (Pending Refund)";
+    detail = `Booking đã hủy với chính sách hoàn tiền. Nhân viên sẽ xác nhận chuyển khoản hoàn về tài khoản của bạn trong 1-3 ngày làm việc.`;
+    icon = <Clock className="w-5 h-5" />;
+    cls = "bg-accent/10 border-accent/30 text-accent";
+  } else if (invStatus === "HOAN_TIEN") {
+    state = "refunded";
+    title = "Đã hoàn tiền (Refunded)";
+    detail = `Số tiền hoàn đã được chuyển về tài khoản. Vui lòng kiểm tra ngân hàng/ví của bạn.`;
+    icon = <CheckCircle2 className="w-5 h-5" />;
+    cls = "bg-chart-3/10 border-chart-3/30 text-chart-3";
+  } else {
+    // Default to no refund (either policy said no, or invoice never paid)
+    state = "no_refund";
+    title = "Không hoàn tiền (No Refund)";
+    detail = booking.hoan_tien === false
+      ? `Theo chính sách hoặc quyết định của staff, booking này không được hoàn tiền.`
+      : `Booking này không có khoản thanh toán cần hoàn.`;
+    icon = <Ban className="w-5 h-5" />;
+    cls = "bg-muted border-border text-muted-foreground";
+  }
+
+  return (
+    <div className={`p-4 rounded-xl border ${cls}`}>
+      <div className="flex items-start gap-3">
+        <div className="shrink-0 mt-0.5">{icon}</div>
+        <div className="flex-1 min-w-0">
+          <div className="text-sm font-bold mb-1">{title}</div>
+          <div className="text-xs leading-relaxed opacity-90">{detail}</div>
+          {state === "refunded" && booking.invoice && (
+            <div className="text-xs mt-2 font-semibold">
+              Số tiền hoàn: ~{formatVND(parseFloat(booking.invoice.tong_cong) * 0.5)} (50% theo policy)
+            </div>
+          )}
+          {state === "pending" && booking.invoice && (
+            <div className="text-xs mt-2 font-semibold">
+              Dự kiến hoàn: {formatVND(parseFloat(booking.invoice.tong_cong) * 0.5)}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function BookingCard({ b, feedback, onCancel, onFeedback }: any) {
   const st = STATUS_LABEL[b.trang_thai];
   const canCancel = ["CHO_XAC_NHAN", "DA_XAC_NHAN"].includes(b.trang_thai);
@@ -134,8 +189,13 @@ function BookingCard({ b, feedback, onCancel, onFeedback }: any) {
           <h3 className="text-2xl font-display font-bold text-foreground">{b.ten_san}</h3>
         </div>
         <div className="text-right">
-          <div className="text-2xl font-display font-bold text-primary">{formatVND(b.tien_san)}</div>
-          <div className="text-xs text-muted-foreground">{b.hinh_thuc_thanh_toan === "TIEN_MAT" ? "Tiền mặt" : "Chuyển khoản"}</div>
+          <div className="text-2xl font-display font-bold text-primary">{formatVND(b.invoice?.tong_cong || b.tien_san)}</div>
+          {b.invoice && parseFloat(b.invoice.tien_dich_vu) > 0 && (
+            <div className="text-xs text-muted-foreground">
+              Sân: {formatVND(b.tien_san)} + DV: {formatVND(b.invoice.tien_dich_vu)}
+            </div>
+          )}
+          <div className="text-xs text-muted-foreground mt-0.5">{b.hinh_thuc_thanh_toan === "TIEN_MAT" ? "Tiền mặt" : "Chuyển khoản"}</div>
         </div>
       </div>
 
@@ -153,9 +213,15 @@ function BookingCard({ b, feedback, onCancel, onFeedback }: any) {
         </div>
       )}
 
-      {b.ly_do_huy && (
-        <div className="mb-3 p-3 rounded-xl bg-destructive/10 border border-destructive/20 text-xs text-destructive">
-          <strong>Lý do hủy:</strong> {b.ly_do_huy}
+      {/* Cancellation reason + refund status — 3 states: No Refund / Pending Refund / Refunded */}
+      {b.trang_thai === "HUY" && (
+        <div className="mb-3 space-y-2">
+          {b.ly_do_huy && (
+            <div className="p-3 rounded-xl bg-destructive/10 border border-destructive/20 text-xs text-destructive">
+              <strong>Lý do hủy:</strong> {b.ly_do_huy}
+            </div>
+          )}
+          <RefundStatusBox booking={b} />
         </div>
       )}
 

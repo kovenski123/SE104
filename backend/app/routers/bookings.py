@@ -36,6 +36,19 @@ def _booking_to_out(b: Booking) -> dict:
     if b.khach_hang:
         ten_khach = b.khach_hang.ho_ten
         sdt_khach = b.khach_hang.sdt
+
+    # Invoice-derived totals (sync với frontend khi add/remove services)
+    invoice_data = None
+    if b.invoice:
+        invoice_data = {
+            "id": b.invoice.id,
+            "tien_san": b.invoice.tien_san,
+            "tien_dich_vu": b.invoice.tien_dich_vu,
+            "giam_gia": b.invoice.giam_gia,
+            "tong_cong": b.invoice.tong_cong,
+            "trang_thai": b.invoice.trang_thai,
+        }
+
     return {
         "id": b.id,
         "ma_dat_san": b.ma_dat_san,
@@ -56,6 +69,7 @@ def _booking_to_out(b: Booking) -> dict:
         "hoan_tien": b.hoan_tien,
         "ngay_tao": b.ngay_tao,
         "services": services_out,
+        "invoice": invoice_data,
     }
 
 

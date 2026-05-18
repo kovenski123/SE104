@@ -73,3 +73,10 @@ def root():
 @app.get("/api/health")
 def health():
     return {"status": "ok"}
+
+
+@app.get("/api/debug/db")
+def debug_db():
+    """Returns current DB info — verify SQLite vs MySQL connection."""
+    from app.core.database import get_db_info
+    return get_db_info()
